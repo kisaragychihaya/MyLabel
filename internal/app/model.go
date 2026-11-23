@@ -157,6 +157,10 @@ type ImageInfo struct {
 	Height  int    `json:"height"`
 	Status  string `json:"status,omitempty"` // new|labeling|done|reviewed|skipped
 	Anns    []Ann  `json:"anns"`
+	// SHA256 is the content hash the scan recorded (after EXIF normalization).
+	// The export writes it into the IR; the exchange document has no place for
+	// it, so it stays runtime only.
+	SHA256 string `json:"-"`
 }
 
 // annsFromRecs converts stored annotation rows into app annotations. Angles are

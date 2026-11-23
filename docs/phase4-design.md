@@ -112,6 +112,8 @@ RuleSegDropped / RuleClipped / RuleDropped`。
 - `convexHull`：单调链凸包（共线点剔除）。
 - `minAreaRect(pts) (cx, cy, w, h, angle)`：旋转卡壳最小外接旋转矩形；
   angle 为 w 边方向（弧度，图像坐标 y 向下），与 ir 的 quadParams 约定一致。
+  规范化为 `w>=h`、`angle∈(-π/2,π/2]`（同一矩形唯一描述，黄金用例确定）；
+  退化输入（单点/共线）返回 w=0/h=0，由调用方按 RuleDropped 丢弃。
 - `bridgeRings(rings) [][2]float64`：多环并单环（Ultralytics
   merge_multi_segment 做法：按外环面积降序，环间用最短距细桥连接成自交
   单环）。单环原样返回。
@@ -202,7 +204,8 @@ RuleSegDropped / RuleClipped / RuleDropped`。
 - rotated 默认写 `<robndbox><cx><cy><w><h><angle>`（roLabelImg 私有扩展，
   弧度制；angle = w 边方向、图像坐标 y 向下，即 IR derived cache 原样）；
   `VOCDowngradeOBB=true` 时降级外接 bndbox（RuleObbToBndbox）。
-- polygon：**不支持**，整条跳过（RuleSegDropped）并在 Warnings 汇总
+- polygon：**不支持**，整条跳过（RuleSegDropped，同时计入
+  Report.AnnotationsDropped——没写出去即 dropped）并在 Warnings 汇总
   「VOC 导出不含分割，N 条 seg 标注被跳过」。
 - 未知类别 → RuleDropped。
 

@@ -46,6 +46,8 @@ internal/app/           全部应用代码（单包）
   irconv.go             app↔IR 转换（rect/poly/rotated_bbox、category key 去重、多环与 attributes 有损计数）
   importapply.go        importer.Dataset → store 的应用管线（类别映射 resolveChoices、applyImport、一条批量 cmdImport undo）
   importwizard.go       "导入标注"向导：格式→路径→映射→报告 四页状态机 + Modal UI；无工作区时按来源路径推导图片根并自动 openDir（parse 前完成）
+  exportconv.go         app→IR 装配（会话内存状态为准，不强制先保存）：类别 appCategoriesToIR、标注 annsToIR、File 用 RelPath 同 cleanImportPath 规则、带 store 的 sha256、inferExportTask 按内容推 det/seg/obb
+  exportwizard.go       "导出数据集"向导：格式(任务/VOC 选项)→split→BuildPlan dry-run 报告→输出目录 四页 + 后台 WriteExport 进度（win.Update，无窗口内联跑）+ Toast
   openir.go             openDir 时根下 project.json 的直接导入（优先于遗留 JSON，库中已有标注则跳过）
   opendir.go            resolveOpenDir：Ultralytics 布局 X/images/train 或 X/images 自动上提到数据集根 X（需同级 labels/），不递归上提
   attributes.go         标注属性面板：双击单选标注打开，暂存类别+属性键值对，确定一次性提交为一条 undo
@@ -55,6 +57,7 @@ internal/store/         SQLite 仓储（categories/images/annotations 三表，s
 internal/imaging/       递归扫描 + JPEG EXIF 物理转正 + 尺寸 + sha256
 internal/ir/            IR 交换模型（bbox/polygon(rings)/rotated_bbox + attributes）、Validate/Normalize、project.json + ir/*.json 读写
 internal/importer/      YOLO（det/seg/obb 按字段数+Task 裁决；接受数据集根目录，labels↔images 镜像匹配，data.yaml 或唯一 *.yaml 取类名）/VOC（robndbox 优先、1-based 选项）/COCO（segmentation 联合类型、RLE 两种 counts 降级 bbox）→ IR
+internal/exporter/      IR → YOLO/COCO/VOC 数据集目录：BuildPlan（纯计算 dry-run，Report 含 Lossy 规则计数+示例）→ WriteExport（临时目录组装→原子改名，已存在目录报错不覆盖，progress 回调）
 cmd/genimg/             测试图片生成器
 docs/poc-design.md      PoC 架构设计文档
 docs/phase1-design.md   阶段 1（数据层）契约

@@ -75,6 +75,16 @@ type App struct {
 	// §5.1), for the same reason: it outlives the frame it is built in.
 	props propsState
 
+	// ex is the export wizard's state (docs/phase4-design.md §9), on App for the
+	// same reason as wiz: the plan, the chosen folder and the running progress
+	// outlive the frame that shows them.
+	ex exportState
+
+	// toast is a message the next frame shows as a toast. A background export
+	// finishes off the main thread and cannot call c.Toast itself (design rule 2),
+	// so it leaves the text here for the main thread to show.
+	toast string
+
 	// interaction state machine
 	mode     Mode
 	tool     Tool // annotation tool: rectangles or polygons (docs/phase2-design.md §4.1)
@@ -480,6 +490,7 @@ func imagesFromRecs(dir string, recs []store.ImageRec) []ImageInfo {
 			Height:  rec.Height,
 			Status:  rec.Status,
 			Anns:    annsFromRecs(rec.Anns),
+			SHA256:  rec.SHA256,
 		}
 	}
 	return images
@@ -534,9 +545,20 @@ func (a *App) View(c *ui.Context) {
 		a.statusBar(c)
 		a.paletteModal(c)
 		a.importModal(c)
+		a.exportModal(c)
 		a.propsModal(c)
 	})
 	a.handleDroppedFiles(root)
+	a.flushToast(c)
+}
+
+// flushToast shows a message a background task left for the main thread, once.
+func (a *App) flushToast(c *ui.Context) {
+	if a.toast == "" {
+		return
+	}
+	c.Toast(a.toast)
+	a.toast = ""
 }
 
 func (a *App) toolbar(c *ui.Context) {
@@ -564,6 +586,9 @@ func (a *App) toolbar(c *ui.Context) {
 		}
 		if ui.Button(c.Key("import"), "导入标注").Clicked() {
 			a.openImportWizard()
+		}
+		if ui.Button(c.Key("exportDataset"), "导出数据集").Clicked() {
+			a.openExportWizard()
 		}
 		ui.Text(c, "工具:").Padding(8, 0, 0, 0)
 		a.toolButton(c, "toolRect", "矩形 (R)", ToolRect)
