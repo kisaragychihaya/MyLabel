@@ -34,12 +34,12 @@ internal/app/           全部应用代码（单包）
   model.go              Ann（可旋转矩形，含 Attributes map）/ImageInfo/docFile/交互模式枚举、Category 别名、Ann↔store.AnnRec 转换
   category.go           类别面板 + 12 色色板 Modal + 生成式调色板（黄金角 HSV）/增删改名换色/删除保护（cmdDeleteCategory）；新工作区类别为空，空表时面板显示提示、curCat=-1（clampCurCat）
   status.go             图片状态：Ctrl+D 切换、首次编辑自动 new→labeling、缩略图圆点颜色
-  canvas.go             画布：Box + 单 Draw 回调绘制全部标注（禁止一个标注一个 Element）；poly 用 FillPath+StrokePolyline；类别名 chip 画在画布 DIP 层（≤500 条全画，>500 只画选中）
-  interact.go           HandleInput 交互状态机（rect/poly/obb 创建、移动/resize/旋转、顶点编辑、框选、整组移动、快捷键、双击开属性）
+  canvas.go             画布：Box + 单 Draw 回调绘制全部标注（禁止一个标注一个 Element）；poly 用 FillPath+StrokePolyline；类别名 chip 画在画布 DIP 层（≤500 条全画，>500 只画选中），尺寸由 canvasView 每帧按类别名测一次缓存进 App（chipBounds 是绘制与命中共用的唯一几何）
+  interact.go           HandleInput 交互状态机（rect/poly/obb 创建、移动/resize/旋转、顶点编辑、框选、整组移动、快捷键、双击开属性、chip 命中、右键 z 序菜单）
   geom.go               纯几何：局部坐标变换、手柄位置、zoomAroundPoint、resizeHandle/rotateTo、annBounds、obbFromPoints
   polygon.go            多边形纯几何：pointInPolygon/nearestEdge/顶点增删/平移（全部返回新切片，不改入参）
-  hit.go                命中测试：顶点 > 手柄 > 边 > 内部（poly 用 pointInPolygon），z 序倒序
-  undo.go               命令栈（200 条上限）+ cmdCreate/cmdDelete/cmdModify + 批量 cmdBatchSet/cmdBatchDelete/cmdDeleteCategory（Command.Img 指明所属图片；Ann 含 slice，快照必须 cloneAnn 深拷贝）
+  hit.go                命中测试：顶点 > 手柄 > 边 > 内部（poly 用 pointInPolygon），z 序倒序；chipHitAt 只命中画出来的 chip
+  undo.go               命令栈（200 条上限）+ cmdCreate/cmdDelete/cmdModify/cmdReorder + 批量 cmdBatchSet/cmdBatchDelete/cmdDeleteCategory（Command.Img 指明所属图片；Ann 含 slice，快照必须 cloneAnn 深拷贝）
   thumbs.go             缩略图 worker 池（4 goroutine + generation 防串代 + win.Update 回主线程；无窗口不启动）
   tiles.go              大图分块（单边 >8000px 触发，tileSize 2048，overview 概览图）、loadImage
   persist.go            save 走 store（只写 dirtyImages 的图 + 类别）、exportJSON、loadDoc、遗留 JSON 迁移
@@ -51,9 +51,10 @@ internal/app/           全部应用代码（单包）
   openir.go             openDir 时根下 project.json 的直接导入（优先于遗留 JSON，库中已有标注则跳过）
   opendir.go            resolveOpenDir：Ultralytics 布局 X/images/train 或 X/images 自动上提到数据集根 X（需同级 labels/），不递归上提
   attributes.go         标注属性面板：双击单选标注打开，暂存类别+属性键值对，确定一次性提交为一条 undo
+  annmenu.go            作用于单条标注的两个菜单（App 字段 catPick/zMenu，按 Image+ID 认人）：双击 chip = 类别单选列表（点一行即应用，一条 cmdModify）；右键标注 = z 序菜单（上移一层/下移一层/移到顶部/移到底部，一条 cmdReorder，到顶/到底的项 Disabled），面板用 ui.Popover + ui.Button
   close.go              ConfirmClose 关闭守卫（保存失败才弹三选；无窗口直接返回 save 结果）
   drop.go               拖文件/文件夹进窗口打开
-internal/store/         SQLite 仓储（categories/images/annotations 三表，schema v4 含 attrs，非并发安全，只在主线程用）
+internal/store/         SQLite 仓储（categories/images/annotations 三表，schema v4 含 attrs，非并发安全，只在主线程用）；标注顺序 = Anns 切片序（= 绘制序），LoadImages 用 ORDER BY rowid 读、ReplaceAnns 按切片序插入，故保存/重开保持顺序（改这两处会破坏 z 序）
 internal/imaging/       递归扫描 + JPEG EXIF 物理转正 + 尺寸 + sha256
 internal/ir/            IR 交换模型（bbox/polygon(rings)/rotated_bbox + attributes）、Validate/Normalize、project.json + ir/*.json 读写
 internal/importer/      YOLO（det/seg/obb 按字段数+Task 裁决；接受数据集根目录，labels↔images 镜像匹配，data.yaml 或唯一 *.yaml 取类名）/VOC（robndbox 优先、1-based 选项）/COCO（segmentation 联合类型、RLE 两种 counts 降级 bbox）→ IR
@@ -87,7 +88,7 @@ docs/phase3-design.md   阶段 3（IR/导入器/属性/obb 四点）契约
 
 ## 交互约定（labelme 风格，改动需保持）
 
-Space+左键拖拽 = 抓手平移；滚轮 = 垂直平移；Shift+滚轮 = 水平平移；Ctrl+滚轮 = 缩放；中键拖拽 = 平移；左键空白拖拽 = 创建框（ToolRect）或加点（ToolPoly/ToolObb）（空类别表下三种工具都不开草稿，提示「请先在右侧面板添加类别」）；R/P/O = 切换矩形/多边形/旋转框工具；旋转框 = 点 4 个角成框（第 4 点即成，Esc 取消、Backspace 删点）；多边形：单击加点、点首顶点/回车/双击闭合（≥3 点）、Esc 取消、Backspace 删末点、拖顶点编辑、Ctrl+点删顶点、双击边插顶点、拖内部整体移动；双击单选标注（rect 任意处、poly 内部）= 属性面板；Ctrl+点击 = 多选切换；Shift+空白拖拽 = 框选；Ctrl+A = 全选；Delete/1-9 作用于全部选中（各一条批量 undo）；拖任一选中项 = 整组平移；resize/旋转/顶点编辑仅单选可用；Esc = 先取消手势再清空选择；Ctrl+D = 标记当前图 done/new；Ctrl+S/Z/Shift+Z = 保存/撤销/重做；L 或工具栏「标签」= 显示/隐藏类别名 chip（默认显示）。加载图片后自动"适应窗口居中"并把键盘焦点移到画布。
+Space+左键拖拽 = 抓手平移；滚轮 = 垂直平移；Shift+滚轮 = 水平平移；Ctrl+滚轮 = 缩放；中键拖拽 = 平移；左键空白拖拽 = 创建框（ToolRect）或加点（ToolPoly/ToolObb）（空类别表下三种工具都不开草稿，提示「请先在右侧面板添加类别」）；R/P/O = 切换矩形/多边形/旋转框工具；旋转框 = 点 4 个角成框（第 4 点即成，Esc 取消、Backspace 删点）；多边形：单击加点、点首顶点/回车/双击闭合（≥3 点）、Esc 取消、Backspace 删末点、拖顶点编辑、Ctrl+点删顶点、双击边插顶点、拖内部整体移动；双击单选标注（rect 任意处、poly 内部）= 属性面板；类别名 chip = 独立控件，优先于其下标注的一切（单选 = 选中该条、双击 = 类别单选列表弹窗，点一行立即改类别并关闭，Esc/取消不改；标签隐藏或 >500 条未选中时不参与命中）；右键标注 = z 序菜单（上移一层/下移一层/移到顶部/移到底部 各一条 undo，已到顶/到底的项置灰；手势或草稿进行中右键无反应，点空白处不弹，点外面/Esc 关闭且不选中、不建草稿）；Ctrl+点击 = 多选切换；Shift+空白拖拽 = 框选；Ctrl+A = 全选；Delete/1-9 作用于全部选中（各一条批量 undo）；拖任一选中项 = 整组平移；resize/旋转/顶点编辑仅单选可用；Esc = 先取消手势再清空选择；Ctrl+D = 标记当前图 done/new；Ctrl+S/Z/Shift+Z = 保存/撤销/重做；L 或工具栏「标签」= 显示/隐藏类别名 chip（默认显示）。加载图片后自动"适应窗口居中"并把键盘焦点移到画布。
 
 ## 测试约定
 

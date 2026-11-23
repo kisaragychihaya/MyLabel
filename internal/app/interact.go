@@ -39,10 +39,10 @@ const statusNoCategories = "请先在右侧面板添加类别"
 // imgPt = (ev.X-panX)/zoom, (ev.Y-panY)/zoom — see pointerImage. The canvas
 // element is not needed for that and is left unnamed.
 func (a *App) handleCanvasInput(_ ui.Element, ev ui.InputEvent) bool {
-	// The properties dialog owns the interaction while it is open: a canvas
-	// shortcut (Delete, a digit, Escape) must not edit the annotations behind
-	// the dialog, whose staged edit names one of them by index (§5.1).
-	if a.props.Open {
+	// The properties dialog and the category picker own the interaction while
+	// they are open: a canvas shortcut (Delete, a digit, Escape) must not edit the
+	// annotations behind them, whose staged edit names one of them by index (§5.1).
+	if a.props.Open || a.catPick.Open {
 		return false
 	}
 	switch ev.Kind {
@@ -80,14 +80,24 @@ func (a *App) pointerImage(x, y float32) Point {
 }
 
 // pointerDown starts one of the drag gestures. Button 0 is the primary
-// button (left), 2 the middle one (ui.InputEvent.Button).
+// button (left), 1 the secondary one (right) and 2 the middle one
+// (ui.InputEvent.Button).
 //
 // The annotation tool decides what a left click on empty canvas does: with
 // ToolRect it starts a rubber-band box, with ToolPoly it starts (or extends) a
 // polygon draft; Shift turns that click-and-drag into a marquee selection
 // instead (§5). Clicking an existing annotation selects it either way, so a
 // polygon stays selectable — and therefore editable — while ToolPoly is active.
+// A right click opens the annotation's z-order menu instead, and a click on a
+// category chip selects — or, double-clicked, re-categorizes — its annotation.
 func (a *App) pointerDown(ev ui.InputEvent) bool {
+	// A z-order menu is a panel of its own: the press that dismisses it must not
+	// also select, clear or create anything behind it. The popover closes itself
+	// on the same press, so the two agree on which press that was.
+	if a.zMenu.Open {
+		a.zMenu = zMenuState{}
+		return true
+	}
 	switch ev.Button {
 	case 2: // middle button: pan
 		a.mode = ModePan
@@ -95,6 +105,11 @@ func (a *App) pointerDown(ev ui.InputEvent) bool {
 		// panning (pointer events carry no deltas).
 		a.drag = dragState{annIndex: -1, handle: -1, start: Point{X: float64(ev.X), Y: float64(ev.Y)}}
 		return true
+	case 1: // secondary button: the z-order menu of the annotation under it
+		if !a.gestureIdle() {
+			return false
+		}
+		return a.openZMenu(ev, a.pointerImage(ev.X, ev.Y))
 	case 0:
 		// Space held (labelme-style hand tool): left-drag pans the image
 		// instead of creating an annotation.
@@ -113,6 +128,17 @@ func (a *App) pointerDown(ev ui.InputEvent) bool {
 		// by landing on the first one (§4.2).
 		if a.mode == ModePolyCreate {
 			a.polyDraftClick(p, ev.Clicks)
+			return true
+		}
+		// A category chip is a control of its own, on top of everything the
+		// annotation under it offers: a click selects the annotation it belongs to
+		// and a double-click opens the category picker (annmenu.go), so neither can
+		// turn into a move, a vertex insert or a new draft.
+		if chip := a.chipHitAt(p); chip >= 0 {
+			a.selectOnly(chip)
+			if ev.Clicks >= 2 {
+				a.openCatPick(chip)
+			}
 			return true
 		}
 		a.pruneSelection()
@@ -510,6 +536,12 @@ func (a *App) zoomAround(cursor Point, factor float64) {
 
 // keyDown handles the canvas's shortcuts.
 func (a *App) keyDown(ev ui.InputEvent) bool {
+	// The z-order menu takes Escape first: it closes the menu rather than
+	// cancelling a gesture or dropping the selection behind it.
+	if a.zMenu.Open && ev.Key == ui.KeyEscape {
+		a.zMenu = zMenuState{}
+		return true
+	}
 	// Ctrl+A selects every annotation of the loaded image (§5).
 	if ev.Mods&ui.Ctrl != 0 && ev.Key == ui.KeyA {
 		a.selectAll()
@@ -582,6 +614,12 @@ func (a *App) dragInProgress() bool {
 		return true
 	}
 	return false
+}
+
+// gestureIdle reports whether no gesture and no draft is in progress: the menus
+// that edit an annotation by index (the z-order menu, annmenu.go) wait for it.
+func (a *App) gestureIdle() bool {
+	return a.mode == ModeIdle && len(a.polyDraft) == 0 && !a.dragInProgress()
 }
 
 // deleteSelection deletes every selected annotation as one undo step, so a

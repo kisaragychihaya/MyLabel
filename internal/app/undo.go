@@ -166,6 +166,49 @@ func cmdModify(a *App, img, index int, before, after Ann) Command {
 	}
 }
 
+// cmdReorder returns the command that moves the annotation carrying id from
+// index from to index to, keeping every other annotation in the order it had:
+// the slice order is the drawing order, so this is the z-order (annmenu.go).
+//
+// The annotation is named by its ID as well as its index, because the indices of
+// a redo may have moved under other edits: a command that finds another
+// annotation where it expects its own does nothing rather than move a stranger.
+func cmdReorder(a *App, img, from, to int, id string) Command {
+	move := func(source, target int) {
+		if img < 0 || img >= len(a.images) {
+			return
+		}
+		anns := a.images[img].Anns
+		if source < 0 || source >= len(anns) || target < 0 || target >= len(anns) {
+			return
+		}
+		if anns[source].ID != id {
+			return
+		}
+		an := anns[source]
+		out := make([]Ann, 0, len(anns))
+		for i := range anns {
+			if i == source {
+				continue
+			}
+			if len(out) == target {
+				out = append(out, an)
+			}
+			out = append(out, anns[i])
+		}
+		if len(out) == target {
+			out = append(out, an)
+		}
+		a.images[img].Anns = out
+	}
+	return Command{
+		Name: "reorder",
+		Img:  img,
+		Do:   func() { move(from, to) },
+		Undo: func() { move(to, from) },
+	}
+}
+
 // annEdit is one annotation's before/after snapshot inside a batch command.
 type annEdit struct {
 	index  int

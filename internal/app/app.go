@@ -75,6 +75,12 @@ type App struct {
 	// §5.1), for the same reason: it outlives the frame it is built in.
 	props propsState
 
+	// catPick is the category picker a double-click on a chip opens, and zMenu
+	// the z-order menu a right-click on an annotation opens: both name their
+	// annotation by image and index, guarded by its ID (see annmenu.go).
+	catPick catPickState
+	zMenu   zMenuState
+
 	// ex is the export wizard's state (docs/phase4-design.md §9), on App for the
 	// same reason as wiz: the plan, the chosen folder and the running progress
 	// outlive the frame that shows them.
@@ -101,10 +107,16 @@ type App struct {
 
 	// draw scratch buffers for the canvas's polygon rendering, reused every
 	// frame by the single Draw callback (never read outside it)
-	scratchPts       [][2]float32
-	scratchPath      ui.Path
-	scratchColors    []ui.Color
-	scratchChipSizes []chipSize
+	scratchPts    [][2]float32
+	scratchPath   ui.Path
+	scratchColors []ui.Color
+
+	// chipSizes is one measured chip size per category, in canvas DIP, and
+	// chipNames the names they were measured from. The frame measures them
+	// (refreshChipSizes) because the pointer has to hit exactly the chips that
+	// frame painted; they outlive the frame for the same reason.
+	chipSizes []chipSize
+	chipNames []string
 
 	// showLabels draws each annotation's category-name chip on the canvas
 	// (labelme-style); the toolbar's 标签 button and the L key toggle it.
@@ -408,6 +420,7 @@ func (a *App) openDir(dir string) {
 	a.paletteOpen = false
 	a.paletteCat = 0
 	a.closeProps() // the dialog edits an annotation of the folder being replaced
+	a.catPick, a.zMenu = catPickState{}, zMenuState{}
 	a.curCat = 0
 	a.clampCurCat()
 
@@ -547,6 +560,7 @@ func (a *App) View(c *ui.Context) {
 		a.importModal(c)
 		a.exportModal(c)
 		a.propsModal(c)
+		a.catPickModal(c)
 	})
 	a.handleDroppedFiles(root)
 	a.flushToast(c)
@@ -677,8 +691,10 @@ func (a *App) thumbStrip(c *ui.Context) {
 		a.mode = ModeIdle
 		a.polyDraft = nil
 		a.hasHover = false
-		// The properties dialog names an annotation of the image being left.
+		// The properties dialog and the annotations' menus name an annotation of
+		// the image being left.
 		a.closeProps()
+		a.catPick, a.zMenu = catPickState{}, zMenuState{}
 	}
 }
 

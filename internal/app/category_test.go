@@ -19,7 +19,7 @@ var (
 
 // panelView renders an App the way App.View does, with a plain 48 DIP bar in
 // place of the toolbar: the panel, the canvas, the thumbnail strip, the status
-// bar, the color palette dialog and the annotation properties dialog.
+// bar, the color palette dialog and the annotation's own dialogs.
 func panelView(c *ui.Context) {
 	a := panelAppRef
 	t := c.Theme()
@@ -33,6 +33,7 @@ func panelView(c *ui.Context) {
 		a.statusBar(c)
 		a.paletteModal(c)
 		a.propsModal(c)
+		a.catPickModal(c)
 	})
 }
 

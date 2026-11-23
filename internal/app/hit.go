@@ -99,6 +99,40 @@ func hitTestAnns(anns []Ann, sel int, p Point, zoom float64) Hit {
 	return noHit
 }
 
+// chipHitAt returns the annotation whose category chip is under the pointer p
+// (image pixels), or -1. Only the chips a frame paints can be hit (chipsFor): a
+// chip alone is clickable, so a double-click on it opens the category picker
+// instead of editing what is under it. Topmost first, as hitTestAnns does.
+func (a *App) chipHitAt(p Point) int {
+	img := a.curImage()
+	if img == nil {
+		return -1
+	}
+	pol := chipsFor(a.showLabels, len(img.Anns))
+	if pol == chipOff {
+		return -1
+	}
+	z := safeZoom(a.zoom)
+	pan := Point{X: a.panX, Y: a.panY}
+	// The pointer in canvas-local DIP, the space the chips are painted in.
+	qx, qy := float32(pan.X+p.X*z), float32(pan.Y+p.Y*z)
+	for i := len(img.Anns) - 1; i >= 0; i-- {
+		if pol == chipSelOnly && !a.isSelected(i) {
+			continue
+		}
+		an := &img.Anns[i]
+		cs, ok := a.chipSizeFor(an.Cat)
+		if !ok {
+			continue
+		}
+		x, y := chipBounds(an, cs, z, pan)
+		if qx >= x && qx <= x+cs.w && qy >= y && qy <= y+cs.h {
+			return i
+		}
+	}
+	return -1
+}
+
 // insideAnn reports whether p is inside the annotation, borders included: the
 // rotated rectangle in local coordinates, or pointInPolygon for a polygon.
 func insideAnn(an *Ann, p Point) bool {

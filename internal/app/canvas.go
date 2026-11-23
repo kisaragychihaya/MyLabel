@@ -57,6 +57,11 @@ func (a *App) canvasView(c *ui.Context) ui.Element {
 	t := c.Theme()
 	bg, muted := t.Background, t.TextMuted
 
+	// Measuring the chip texts needs a *ui.Context, which the Draw callback does
+	// not get, and the pointer has to hit the chips the frame painted: both read
+	// the sizes measured here.
+	a.refreshChipSizes(c)
+
 	cv := ui.Box(c).FillWidth().Grow(1).Clip().Label(canvasLabel)
 	cv.Bind(&a.canvasRef)
 	cv.Focusable()
@@ -79,6 +84,7 @@ func (a *App) canvasView(c *ui.Context) ui.Element {
 		})
 	})
 	cv.HandleInput(func(ev ui.InputEvent) bool { return a.handleCanvasInput(cv, ev) })
+	a.zMenuView(c, cv)
 	if a.focusCanvas {
 		a.canvasRef.Focus(c)
 		a.focusCanvas = false
@@ -140,29 +146,84 @@ type viewport struct {
 	path   ui.Path
 	colors []ui.Color
 	// cats are the category currently in effect (the chip looks a name up by
-	// index), and chipSizes caches each category's measured chip size for this
-	// frame: many annotations share one category.
-	cats      []Category
-	chipSizes []chipSize
+	// index), and sizes is one measured chip size per category, owned by App so
+	// that the pointer can hit the chips a frame painted.
+	cats  []Category
+	sizes []chipSize
 }
 
 // chipSize is one category chip's measured size in canvas DIP.
 type chipSize struct{ w, h float32 }
 
-// chipSize returns category i's chip size, measuring its name on first use in
-// the frame. ok is false for a category index beyond the list, which draws no
-// chip at all.
-func (v *viewport) chipSize(p *ui.Painter, i int) (chipSize, bool) {
-	if i < 0 || i >= len(v.cats) || i >= len(v.chipSizes) {
+// chipSizeOf returns category i's chip size, measured by refreshChipSizes. ok is
+// false for a category index beyond the list, which draws no chip at all.
+func (v *viewport) chipSizeOf(i int) (chipSize, bool) {
+	if i < 0 || i >= len(v.cats) || i >= len(v.sizes) {
 		return chipSize{}, false
 	}
-	cs := &v.chipSizes[i]
-	if cs.w == 0 && cs.h == 0 {
-		tw, th := p.MeasureText(0, ui.Span{Text: v.cats[i].Name, Size: annChipFontSizeDIP})
-		cs.w = tw + 2*annChipPadXDIP
-		cs.h = th + 2*annChipPadYDIP
+	return v.sizes[i], true
+}
+
+// chipSizeFor returns category cat's chip size the way the pointer hit test needs
+// it. An unmeasured chip (no frame has painted since the categories changed)
+// reports false: the pointer cannot click what was never drawn.
+func (a *App) chipSizeFor(cat int) (chipSize, bool) {
+	if cat < 0 || cat >= len(a.categories) || cat >= len(a.chipSizes) {
+		return chipSize{}, false
 	}
-	return *cs, true
+	cs := a.chipSizes[cat]
+	if cs.w <= 0 || cs.h <= 0 {
+		return chipSize{}, false
+	}
+	return cs, true
+}
+
+// refreshChipSizes measures every category's chip when the category names
+// changed: the chip's width and height depend on its name, and both the drawing
+// and the hit test read them from here (Context.MeasureText lays text out exactly
+// as Painter.MeasureText does). A frame whose names are unchanged allocates
+// nothing.
+func (a *App) refreshChipSizes(c *ui.Context) {
+	if a.chipMeasured() {
+		return
+	}
+	a.chipNames = make([]string, len(a.categories))
+	a.chipSizes = make([]chipSize, len(a.categories))
+	for i, cat := range a.categories {
+		a.chipNames[i] = cat.Name
+		tw, th := c.MeasureText(0, ui.Span{Text: cat.Name, Size: annChipFontSizeDIP})
+		a.chipSizes[i] = chipSize{w: tw + 2*annChipPadXDIP, h: th + 2*annChipPadYDIP}
+	}
+}
+
+// chipMeasured reports whether chipSizes already holds one measured chip per
+// category, measured from the current names.
+func (a *App) chipMeasured() bool {
+	if len(a.chipSizes) != len(a.categories) || len(a.chipNames) != len(a.categories) {
+		return false
+	}
+	for i, cat := range a.categories {
+		if a.chipNames[i] != cat.Name {
+			return false
+		}
+	}
+	return true
+}
+
+// chipBounds returns the top-left corner of an annotation's category chip in
+// canvas-local DIP. The chip's height is its measured size (the caller paints
+// and hits it with the same numbers), its bottom edge sits on the annotation's
+// AABB top edge, and it flips inside the annotation when hanging above it would
+// leave the canvas.
+func chipBounds(an *Ann, cs chipSize, zoom float64, pan Point) (x, y float32) {
+	z := safeZoom(zoom)
+	b := annBounds(an)
+	top := float32(pan.Y + b.MinY*z)
+	x, y = float32(pan.X+b.MinX*z), top-cs.h
+	if y < 0 {
+		y = top
+	}
+	return x, y
 }
 
 // chipDraw says whether an annotation's category chip is painted this frame.
@@ -243,14 +304,14 @@ func (v *viewport) polyPoints(an *Ann) (pts [][2]float32, onCanvas bool) {
 // DIP.
 func (a *App) annLayer(p *ui.Painter, r ui.Rect) {
 	v := &viewport{
-		pan:       Point{X: a.panX, Y: a.panY},
-		zoom:      safeZoom(a.zoom),
-		view:      ui.Rect{W: r.W, H: r.H},
-		pts:       a.scratchPts,
-		path:      a.scratchPath,
-		colors:    a.catColors(),
-		cats:      a.categories,
-		chipSizes: a.resetChipSizes(),
+		pan:    Point{X: a.panX, Y: a.panY},
+		zoom:   safeZoom(a.zoom),
+		view:   ui.Rect{W: r.W, H: r.H},
+		pts:    a.scratchPts,
+		path:   a.scratchPath,
+		colors: a.catColors(),
+		cats:   a.categories,
+		sizes:  a.chipSizes,
 	}
 	// Every selected annotation is highlighted; only a sole selection carries
 	// the fill and the handles (§5), so a Ctrl+A over a thousand annotations
@@ -277,19 +338,8 @@ func (a *App) annLayer(p *ui.Painter, r ui.Rect) {
 	a.scratchPts, a.scratchPath = v.pts, v.path
 }
 
-// resetChipSizes clears the canvas's chip measurement buffer for a new frame:
-// category names change between frames, so their measured widths do too.
-func (a *App) resetChipSizes() []chipSize {
-	if cap(a.scratchChipSizes) < len(a.categories) {
-		a.scratchChipSizes = make([]chipSize, len(a.categories))
-	} else {
-		a.scratchChipSizes = a.scratchChipSizes[:len(a.categories)]
-		clear(a.scratchChipSizes)
-	}
-	return a.scratchChipSizes
-}
-
-// drawAnn renders one annotation in canvas-local DIP, dispatching on its kind.// selected draws it as part of the selection (a bolder outline); sole marks the
+// drawAnn renders one annotation in canvas-local DIP, dispatching on its kind.
+// selected draws it as part of the selection (a bolder outline); sole marks the
 // selection's only annotation, which alone gets the fill and the handles (§5).
 // chips is the frame's chip policy; the chip itself is drawn for the selection
 // only when the policy says so.
@@ -335,8 +385,7 @@ func drawAnn(p *ui.Painter, an *Ann, selected, sole bool, v *viewport, chips chi
 	p.StrokePolyline(outline[:], width, col)
 
 	if chips == chipAll || chips == chipSelOnly && selected {
-		left, top, _, _ := aabb(quad[:])
-		drawChip(p, an, left, top, v)
+		drawChip(p, an, v)
 	}
 }
 
@@ -355,7 +404,6 @@ func drawPolyAnn(p *ui.Painter, an *Ann, selected, sole bool, v *viewport, chips
 	if len(pts) < 2 {
 		return
 	}
-	left, top, _, _ := aabb(pts)
 
 	col := v.catColor(an.Cat)
 	if sole && len(pts) >= minPolyVertices {
@@ -378,37 +426,23 @@ func drawPolyAnn(p *ui.Painter, an *Ann, selected, sole bool, v *viewport, chips
 	p.StrokePolyline(v.pts, width, col)
 
 	if chips == chipAll || chips == chipSelOnly && selected {
-		drawChip(p, an, left, top, v)
+		drawChip(p, an, v)
 	}
-}
-
-// aabb returns the bounds of canvas-local points.
-func aabb(pts [][2]float32) (left, top, right, bottom float32) {
-	left, top = float32(math.MaxFloat32), float32(math.MaxFloat32)
-	right, bottom = -left, -top
-	for _, q := range pts {
-		left, right = min(left, q[0]), max(right, q[0])
-		top, bottom = min(top, q[1]), max(bottom, q[1])
-	}
-	return left, top, right, bottom
 }
 
 // drawChip paints one annotation's category-name chip in canvas-local DIP: the
 // category color as a rounded background and the name in whichever of black or
-// white contrasts with it. The chip's bottom edge sits on the annotation's
-// AABB top edge and flips inside the box when it would leave the canvas. A
-// category index beyond the list draws nothing, so a stale annotation never
-// panics the frame.
-func drawChip(p *ui.Painter, an *Ann, left, top float32, v *viewport) {
-	cs, ok := v.chipSize(p, an.Cat)
+// white contrasts with it. chipBounds places it on the annotation's AABB top
+// edge, flipped inside the box when it would leave the canvas, and is what the
+// pointer hit test uses too. A category index beyond the list draws nothing, so
+// a stale annotation never panics the frame.
+func drawChip(p *ui.Painter, an *Ann, v *viewport) {
+	cs, ok := v.chipSizeOf(an.Cat)
 	if !ok {
 		return
 	}
 	col := v.catColor(an.Cat)
-	x, y := left, top-cs.h
-	if y < v.view.Y {
-		y = top
-	}
+	x, y := chipBounds(an, cs, v.zoom, v.pan)
 	p.Fill(ui.Rect{X: x, Y: y, W: cs.w, H: cs.h}, ui.RGBA(col.R, col.G, col.B, annChipAlpha), annChipRadiusDIP)
 	p.Text(x+annChipPadXDIP, y+annChipPadYDIP, v.cats[an.Cat].Name, annChipFontSizeDIP, contrastTextColor(col))
 }
