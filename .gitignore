@@ -1,0 +1,18 @@
+# 构建产物
+dist/
+*.exe
+
+# mygo 开发缓存
+.mygo/
+
+# 测试数据（生成器见 cmd/genimg）
+testdata/
+
+# 工作区数据库（用户数据，不入库）
+*.db
+*.db-wal
+*.db-shm
+
+# 临时与日志
+*.log
+*.tmp

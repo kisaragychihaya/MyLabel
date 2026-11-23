@@ -1,0 +1,6 @@
+使用mygo原生https://github.com/egoist/mygo 参考项目C:\Users\admin\Desktop\NetDream
+开发一款图像标注软件
+标注内部格式使用自定义的IR 可以转为yolo txt coco json voc的xml
+导入图片文件夹路径 或者标注IR文件 启动标注，也要提供三种目标格式转IR的功能
+要支持 det seg obb这些任务 yolo格式参考https://github.com/ultralytics/ultralytics 
+导出时均生成完整文件夹结构的项目（要复制图片 和标注产物 和和meta数据（例如ultralytics的data.yaml）进去
