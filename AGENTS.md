@@ -17,6 +17,7 @@ go build ./...            # 编译
 go vet ./...              # 静态检查
 go tool mygo vet ./...    # mygo immediate-mode 误用检查（必须过）
 go test ./... -count=1    # 全部测试（必须全绿）
+go tool mygo i18n check   # 消息目录检查（必须零 error，目标零 warning）
 go test -bench=Benchmark -run='^$' ./internal/app/   # 绘制性能
 GOFLAGS="-tags=mygo_nowebview" go tool mygo build    # 出 Windows exe + NSIS 安装包 → dist/windows-amd64/
 go tool mygo build -platform web                     # WASM 浏览器版 → dist/web/
@@ -47,8 +48,10 @@ internal/app/           全部应用代码（单包）
   importapply.go        importer.Dataset → store 的应用管线（类别映射 resolveChoices、applyImport、一条批量 cmdImport undo）
   importwizard.go       "导入标注"向导：格式→路径→映射→报告 四页状态机 + Modal UI；无工作区时按来源路径推导图片根并自动 openDir（parse 前完成）
   exportconv.go         app→IR 装配（会话内存状态为准，不强制先保存）：类别 appCategoriesToIR、标注 annsToIR、File 用 RelPath 同 cleanImportPath 规则、带 store 的 sha256、inferExportTask 按内容推 det/seg/obb
-  exportwizard.go       "导出数据集"向导：格式(任务/VOC 选项)→split→BuildPlan dry-run 报告→输出目录 四页 + 后台 WriteExport 进度（win.Update，无窗口内联跑）+ Toast
+  exportwizard.go       "导出数据集"向导：格式(任务/VOC 选项)→split→BuildPlan dry-run 报告→输出目录 四页 + 逐图 split 调整子对话框（Overrides 最小化）+ 后台 WriteExport 进度/可取消（ctx，win.Update，无窗口内联跑）+ Toast；VOC seg 掩码默认勾选
   openir.go             openDir 时根下 project.json 的直接导入（优先于遗留 JSON，库中已有标注则跳过）
+  nav.go                A/D 图片导航（goImage 只设 selImg，加载交给 thumbStrip 调和）+ F 适应窗口（fitWindow 置 fitOnLoad）
+  carry.go              Ctrl+B 沿用上一张标注（carryPrevImage 深拷贝+换 ID+整批选中，cmdCarry 一条 undo）
   opendir.go            resolveOpenDir：Ultralytics 布局 X/images/train 或 X/images 自动上提到数据集根 X（需同级 labels/），不递归上提
   attributes.go         标注属性面板：双击单选标注打开，暂存类别+属性键值对，确定一次性提交为一条 undo
   annmenu.go            作用于单条标注的两个菜单（App 字段 catPick/zMenu，按 Image+ID 认人）：双击 chip = 类别单选列表（点一行即应用，一条 cmdModify）；右键标注 = z 序菜单（上移一层/下移一层/移到顶部/移到底部，一条 cmdReorder，到顶/到底的项 Disabled），面板用 ui.Popover + ui.Button
@@ -58,12 +61,16 @@ internal/store/         SQLite 仓储（categories/images/annotations 三表，s
 internal/imaging/       递归扫描 + JPEG EXIF 物理转正 + 尺寸 + sha256
 internal/ir/            IR 交换模型（bbox/polygon(rings)/rotated_bbox + attributes）、Validate/Normalize、project.json + ir/*.json 读写
 internal/importer/      YOLO（det/seg/obb 按字段数+Task 裁决；接受数据集根目录，labels↔images 镜像匹配，data.yaml 或唯一 *.yaml 取类名）/VOC（robndbox 优先、1-based 选项）/COCO（segmentation 联合类型、RLE 两种 counts 降级 bbox）→ IR
-internal/exporter/      IR → YOLO/COCO/VOC 数据集目录：BuildPlan（纯计算 dry-run，Report 含 Lossy 规则计数+示例）→ WriteExport（临时目录组装→原子改名，已存在目录报错不覆盖，progress 回调）
+internal/exporter/      IR → YOLO/COCO/VOC 数据集目录：BuildPlan（纯计算 dry-run，Report 含 Lossy 规则计数+示例）→ WriteExport（ctx 可取消，临时目录组装→原子改名，已存在目录报错不覆盖，progress 回调）；SplitPolicy.Overrides 逐图强制 train/val；raster.go VOC seg 掩码（Options.VOCSeg：SegmentationClass/Object 调色板 PNG，scanline even-odd 栅格化）
+internal/app/visual_test.go  tt.Image() 像素级视觉回归六场景（颜色拟合断言，避开字形区）
+locales/                i18n 消息目录：zh-Hans.json（源）+ en.json + catalog_gen.go（`go tool mygo generate` 产物，入库；改文案 = 改 JSON + regenerate）
 cmd/genimg/             测试图片生成器
 docs/poc-design.md      PoC 架构设计文档
 docs/phase1-design.md   阶段 1（数据层）契约
 docs/phase2-design.md   阶段 2（seg/多选/类别面板/状态标记）契约
 docs/phase3-design.md   阶段 3（IR/导入器/属性/obb 四点）契约
+docs/phase4-design.md   阶段 4（exporter 三格式 + 导出向导）契约
+docs/phase5-design.md   阶段 5（导航/沿用/视觉回归/导出三遗留/i18n）契约
 开发计划书.md           总体开发计划与进度追踪
 ```
 
@@ -88,7 +95,7 @@ docs/phase3-design.md   阶段 3（IR/导入器/属性/obb 四点）契约
 
 ## 交互约定（labelme 风格，改动需保持）
 
-Space+左键拖拽 = 抓手平移；滚轮 = 垂直平移；Shift+滚轮 = 水平平移；Ctrl+滚轮 = 缩放；中键拖拽 = 平移；左键空白拖拽 = 创建框（ToolRect）或加点（ToolPoly/ToolObb）（空类别表下三种工具都不开草稿，提示「请先在右侧面板添加类别」）；R/P/O = 切换矩形/多边形/旋转框工具；旋转框 = 点 4 个角成框（第 4 点即成，Esc 取消、Backspace 删点）；多边形：单击加点、点首顶点/回车/双击闭合（≥3 点）、Esc 取消、Backspace 删末点、拖顶点编辑、Ctrl+点删顶点、双击边插顶点、拖内部整体移动；双击单选标注（rect 任意处、poly 内部）= 属性面板；类别名 chip = 独立控件，优先于其下标注的一切（单选 = 选中该条、双击 = 类别单选列表弹窗，点一行立即改类别并关闭，Esc/取消不改；标签隐藏或 >500 条未选中时不参与命中）；右键标注 = z 序菜单（上移一层/下移一层/移到顶部/移到底部 各一条 undo，已到顶/到底的项置灰；手势或草稿进行中右键无反应，点空白处不弹，点外面/Esc 关闭且不选中、不建草稿）；Ctrl+点击 = 多选切换；Shift+空白拖拽 = 框选；Ctrl+A = 全选；Delete/1-9 作用于全部选中（各一条批量 undo）；拖任一选中项 = 整组平移；resize/旋转/顶点编辑仅单选可用；Esc = 先取消手势再清空选择；Ctrl+D = 标记当前图 done/new；Ctrl+S/Z/Shift+Z = 保存/撤销/重做；L 或工具栏「标签」= 显示/隐藏类别名 chip（默认显示）。加载图片后自动"适应窗口居中"并把键盘焦点移到画布。
+Space+左键拖拽 = 抓手平移；滚轮 = 垂直平移；Shift+滚轮 = 水平平移；Ctrl+滚轮 = 缩放；中键拖拽 = 平移；左键空白拖拽 = 创建框（ToolRect）或加点（ToolPoly/ToolObb）（空类别表下三种工具都不开草稿，提示「请先在右侧面板添加类别」）；R/P/O = 切换矩形/多边形/旋转框工具；旋转框 = 点 4 个角成框（第 4 点即成，Esc 取消、Backspace 删点）；多边形：单击加点、点首顶点/回车/双击闭合（≥3 点）、Esc 取消、Backspace 删末点、拖顶点编辑、Ctrl+点删顶点、双击边插顶点、拖内部整体移动；双击单选标注（rect 任意处、poly 内部）= 属性面板；类别名 chip = 独立控件，优先于其下标注的一切（单选 = 选中该条、双击 = 类别单选列表弹窗，点一行立即改类别并关闭，Esc/取消不改；标签隐藏或 >500 条未选中时不参与命中）；右键标注 = z 序菜单（上移一层/下移一层/移到顶部/移到底部 各一条 undo，已到顶/到底的项置灰；手势或草稿进行中右键无反应，点空白处不弹，点外面/Esc 关闭且不选中、不建草稿）；Ctrl+点击 = 多选切换；Shift+空白拖拽 = 框选；Ctrl+A = 全选；Delete/1-9 作用于全部选中（各一条批量 undo）；拖任一选中项 = 整组平移；resize/旋转/顶点编辑仅单选可用；Esc = 先取消手势再清空选择；Ctrl+D = 标记当前图 done/new；Ctrl+S/Z/Shift+Z = 保存/撤销/重做；A/D = 上一张/下一张（无修饰键才生效，越界不循环只在状态栏提示；拖动手势中拒绝）；Ctrl+B = 沿用上一张标注（深拷贝追加+整批选中，一条 undo）；F = 重新适应窗口居中（无修饰键）；L 或工具栏「标签」= 显示/隐藏类别名 chip（默认显示）。加载图片后自动"适应窗口居中"并把键盘焦点移到画布。
 
 ## 测试约定
 
@@ -99,6 +106,8 @@ Space+左键拖拽 = 抓手平移；滚轮 = 垂直平移；Shift+滚轮 = 水�
 -  Tester 的滚轮/按键不带修饰键：测 Ctrl/Shift 组合时直接调 `handleCanvasInput` 构造 `ui.InputEvent`。
 - Tester 的连击计数是**包内共享、跨测试保留**的（同一个 Tester 复用，时钟只有 `tt.Advance` 才走）：测试开头先 `tt.Advance` 断开上一次的点击序列，否则第一次点击会带着 Clicks=2 进来（会被当成双击）。
 - 修改交互行为必须同步更新对应回归测试（见 `interact_test.go` 命名风格 `TestXxxYyy`）。
+- 文案断言：`internal/app` 的 `TestMain` 钉死 `MYGO_LOCALE=zh-Hans`（该包有大量中文精确断言）；断言文案时优先查 `locales.*` 表而非硬编码（见 `main_test.go`）；`MYGO_LOCALE=en go test ./...` 必须也能全绿。
+- 视觉回归（`visual_test.go`）断颜色不断字形：像素按"目标色 at 覆盖率 over 底色"拟合（容差 ±2），采样避开文字区；画布尺寸有守卫，场景坐标失效会报"装不下测试图片"而非假绿。
 
 ## 已知限制（PoC 遗留，见开发计划书 §6 阶段 0 记录）
 
@@ -109,4 +118,5 @@ Space+左键拖拽 = 抓手平移；滚轮 = 垂直平移；Shift+滚轮 = 水�
 - 目录扫描已递归（`imaging.Scan`），但无文件监视；`exportJSON` 仍用 Remove+Rename（Windows 无原子覆盖，PoC 接受）
 - 遗留 JSON 只在"库中所有图片都没有标注"时自动迁移一次，且不删旧文件；匹配按裸文件名或唯一 base 名；PoC 文档的 ann ID 跨会话复用，导入时按图去重（`ensureUniqueAnnIDs`），加载后 `seedAnnIDCounter` 防止新 ID 撞车
 - 5000+ 标注时 CPU 光栅掩码图集是瓶颈（真机 GPU 无此问题）
-- 万级图片与 >8000px 大图的专项压测未做（测试数据生成命令见上）
+- UI 文案走 `locales/` 消息目录（zh-Hans 源 + en）；store/importer/exporter/ir/imaging 的 error 字符串保持中文（经 err.Error() 进 UI），属刻意范围外
+- 万级图片与 >8000px 大图已压测（阶段 5 W5，无窗口 headless 计时）：10000 张 640×480 openDir（扫描+EXIF+sha256+SQLite 同步）≈2.3s，单张 640×480 loadImage ≈2-3ms；8192×8192 分块大图 loadImage ≈1.1s。缩略图条万级滚动的主观流畅度与 GUI 内大图缩放/平移未自动化，需人工抽查
