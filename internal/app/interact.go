@@ -547,6 +547,22 @@ func (a *App) keyDown(ev ui.InputEvent) bool {
 		a.selectAll()
 		return true
 	}
+	// Ctrl+B carries the previous image's annotations over (§2).
+	if ev.Mods&ui.Ctrl != 0 && ev.Key == ui.KeyB {
+		return a.carryPrevImage()
+	}
+	// A/D switch images, F refits the view: only without modifiers, so the
+	// Ctrl+A/Ctrl+D combinations above and in View keep their single meaning.
+	if ev.Mods == 0 {
+		switch ev.Key {
+		case ui.KeyA:
+			return a.goImage(-1)
+		case ui.KeyD:
+			return a.goImage(1)
+		case ui.KeyF:
+			return a.fitWindow()
+		}
+	}
 	switch ev.Key {
 	case ui.KeySpace:
 		a.spacePan = true

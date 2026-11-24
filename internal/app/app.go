@@ -609,7 +609,7 @@ func (a *App) toolbar(c *ui.Context) {
 		a.toolButton(c, "toolPoly", "多边形 (P)", ToolPoly)
 		a.toolButton(c, "toolObb", "旋转框 (O)", ToolObb)
 		a.labelButton(c)
-		ui.Text(c, "数字键 1-9 改类别，双击标注改属性，Ctrl+D 标记完成").Padding(8, 0, 0, 0).TextColor(t.TextMuted)
+		ui.Text(c, "数字键 1-9 改类别，双击标注改属性，Ctrl+D 标记完成，A/D 切换图片，Ctrl+B 沿用上一张").Padding(8, 0, 0, 0).TextColor(t.TextMuted)
 	})
 }
 
