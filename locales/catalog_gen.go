@@ -426,6 +426,24 @@ func (msgs Messages) ToolStripObb() string {
 	return Catalog.Format(msgs.locale, "toolStripObb", nil)
 }
 
+// ToolStripAI says "智能标注 (S)"
+// in the language the app shows.
+//
+// The tool strip's AI tool button: its accessible name and its tooltip, the
+// tool's name and its shortcut. The tooltip appends the shape the next
+// double-click will create.
+func ToolStripAI() string { return In(i18n.Locale()).ToolStripAI() }
+
+// ToolStripAI says "智能标注 (S)"
+// in the language of msgs.
+//
+// The tool strip's AI tool button: its accessible name and its tooltip, the
+// tool's name and its shortcut. The tooltip appends the shape the next
+// double-click will create.
+func (msgs Messages) ToolStripAI() string {
+	return Catalog.Format(msgs.locale, "toolStripAI", nil)
+}
+
 // StatusOpened says "{layout, select, widen {检测到 YOLO 数据集布局，已改为打开数据集根，} other {}}已打开 {dir}（{…"
 // in the language the app shows.
 //
@@ -916,6 +934,84 @@ func StatusObbTooSmall() string { return In(i18n.Locale()).StatusObbTooSmall() }
 // The status bar, when a rotated box drag was too small to keep.
 func (msgs Messages) StatusObbTooSmall() string {
 	return Catalog.Format(msgs.locale, "statusObbTooSmall", nil)
+}
+
+// StatusAIEncoding says "正在编码图像，请稍候…"
+// in the language the app shows.
+//
+// The status bar, while the AI assist encodes the image its prompt will be
+// decoded against; the first run on an image pays this.
+func StatusAIEncoding() string { return In(i18n.Locale()).StatusAIEncoding() }
+
+// StatusAIEncoding says "正在编码图像，请稍候…"
+// in the language of msgs.
+//
+// The status bar, while the AI assist encodes the image its prompt will be
+// decoded against; the first run on an image pays this.
+func (msgs Messages) StatusAIEncoding() string {
+	return Catalog.Format(msgs.locale, "statusAIEncoding", nil)
+}
+
+// StatusAIDecoding says "正在推理…"
+// in the language the app shows.
+//
+// The status bar, while the AI assist runs the model over the collected
+// points; the image was already encoded.
+func StatusAIDecoding() string { return In(i18n.Locale()).StatusAIDecoding() }
+
+// StatusAIDecoding says "正在推理…"
+// in the language of msgs.
+//
+// The status bar, while the AI assist runs the model over the collected
+// points; the image was already encoded.
+func (msgs Messages) StatusAIDecoding() string {
+	return Catalog.Format(msgs.locale, "statusAIDecoding", nil)
+}
+
+// StatusAIFailed says "智能标注失败：{err}"
+// in the language the app shows.
+//
+// The status bar, when the AI assist could not produce a mask.
+func StatusAIFailed(err string) string { return In(i18n.Locale()).StatusAIFailed(err) }
+
+// StatusAIFailed says "智能标注失败：{err}"
+// in the language of msgs.
+//
+// The status bar, when the AI assist could not produce a mask.
+func (msgs Messages) StatusAIFailed(err string) string {
+	return Catalog.Format(msgs.locale, "statusAIFailed", map[string]any{"err": err})
+}
+
+// StatusAIDone says "已生成{kind}标注"
+// in the language the app shows.
+//
+// The status bar, after the AI assist created an annotation: the shape it
+// made.
+func StatusAIDone(kind string) string { return In(i18n.Locale()).StatusAIDone(kind) }
+
+// StatusAIDone says "已生成{kind}标注"
+// in the language of msgs.
+//
+// The status bar, after the AI assist created an annotation: the shape it
+// made.
+func (msgs Messages) StatusAIDone(kind string) string {
+	return Catalog.Format(msgs.locale, "statusAIDone", map[string]any{"kind": kind})
+}
+
+// StatusAINoMask says "未检出目标，请换个位置再点一次"
+// in the language the app shows.
+//
+// The status bar, when the AI assist returned a mask with no foreground at
+// the collected points.
+func StatusAINoMask() string { return In(i18n.Locale()).StatusAINoMask() }
+
+// StatusAINoMask says "未检出目标，请换个位置再点一次"
+// in the language of msgs.
+//
+// The status bar, when the AI assist returned a mask with no foreground at
+// the collected points.
+func (msgs Messages) StatusAINoMask() string {
+	return Catalog.Format(msgs.locale, "statusAINoMask", nil)
 }
 
 // StatusNewImage says "新图"

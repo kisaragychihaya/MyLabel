@@ -343,8 +343,28 @@ func (a *App) annLayer(p *ui.Painter, r ui.Rect) {
 	case ModeMarquee:
 		a.drawMarquee(p, v)
 	}
+	a.drawAIPoints(p)
 	a.drawHandles(p)
 	a.scratchPts, a.scratchPath = v.pts, v.path
+}
+
+// drawAIPoints paints one small cross per foreground point the AI tool has
+// collected, in the theme's accent color: constant size on screen, like the
+// handles, so the marks stay readable at any zoom. It is a per-point cost inside
+// the canvas's single Draw callback (docs/phase7-design.md §7).
+func (a *App) drawAIPoints(p *ui.Painter) {
+	if len(a.aiPoints) == 0 {
+		return
+	}
+	accent := p.Theme().Accent
+	z := safeZoom(a.zoom)
+	for _, q := range a.aiPoints {
+		x, y := float32(a.panX+q.X*z), float32(a.panY+q.Y*z)
+		hor := [2][2]float32{{x - aiCrossDIP, y}, {x + aiCrossDIP, y}}
+		ver := [2][2]float32{{x, y - aiCrossDIP}, {x, y + aiCrossDIP}}
+		p.StrokePolyline(hor[:], annStrokeDIP, accent)
+		p.StrokePolyline(ver[:], annStrokeDIP, accent)
+	}
 }
 
 // drawAnn renders one annotation in canvas-local DIP, dispatching on its kind.

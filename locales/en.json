@@ -48,6 +48,7 @@
   "@toolStripObb": {
     "description": "The tool strip's rotated box tool button: its accessible name and its tooltip, the tool's name and its shortcut."
   },
+  "toolStripAI": "Smart select (S)",
   "statusOpened": "{layout, select, widen {Opened the dataset root instead, since this is an Ultralytics layout: } other {}}Opened {dir} ({images, plural, one {# image} other {# images}}){rotated, plural, =0 {} one {, # rotated upright} other {, # rotated upright}}{migrated, plural, =0 {} one {, # image migrated from the old JSON} other {, # images migrated from the old JSON}}{imported, plural, =0 {} one {, imported an IR project of # image} other {, imported an IR project of # images}}{importedAnns, plural, =0 {} one { with # annotation} other { with # annotations}}{newCategories, plural, =0 {} one { (# new category)} other { (# new categories)}}{skippedAnns, plural, =0 {} one {, # annotation could not be converted and was skipped} other {, # annotations could not be converted and were skipped}}",
   "statusIRImportFailed": "{layout, select, widen {Opened the dataset root instead, since this is an Ultralytics layout: } other {}}Opened {dir} ({images, plural, one {# image} other {# images}}), but the IR project could not be imported: {err}",
   "statusLegacyMigrationFailed": "{layout, select, widen {Opened the dataset root instead, since this is an Ultralytics layout: } other {}}Opened {dir} ({images, plural, one {# image} other {# images}}), but the old JSON was not migrated: {err}",
@@ -81,6 +82,11 @@
   "statusDropUnsupported": "What was dropped is neither an image nor a folder",
   "statusNoCategories": "Add a category in the panel on the right first",
   "statusObbTooSmall": "The rotated box was too small and was dropped",
+  "statusAIEncoding": "Encoding the image, one moment…",
+  "statusAIDecoding": "Running the model…",
+  "statusAIFailed": "Smart select failed: {err}",
+  "statusAIDone": "Created a {kind} annotation",
+  "statusAINoMask": "Nothing was found there: click somewhere else and try again",
   "statusNewImage": "New",
   "statusLabeling": "Labeling",
   "statusDone": "Done",

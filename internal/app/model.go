@@ -333,6 +333,10 @@ const (
 	ToolRect
 	ToolPoly
 	ToolObb
+	// ToolAI is the SAM2 assist: it collects foreground points and turns the
+	// mask the model predicts into a new annotation, so it belongs to the
+	// creation group (docs/phase7-design.md §2).
+	ToolAI
 	// ToolPan drags the image with the left button, as Space does in any tool.
 	ToolPan
 	// ToolZoom zooms in around a click, out with Alt held.
@@ -342,10 +346,12 @@ const (
 )
 
 // isCreationTool reports whether t only starts new annotations and leaves the
-// existing ones alone (docs/phase6-design.md §6.2).
+// existing ones alone (docs/phase6-design.md §6.2). The AI tool collects points
+// wherever the press lands, exactly as the three drawing tools start a shape
+// there (docs/phase7-design.md §2).
 func isCreationTool(t Tool) bool {
 	switch t {
-	case ToolRect, ToolPoly, ToolObb:
+	case ToolRect, ToolPoly, ToolObb, ToolAI:
 		return true
 	}
 	return false

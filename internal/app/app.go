@@ -2,6 +2,7 @@ package app
 
 import (
 	"math"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -11,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"mylabel/internal/imaging"
+	"mylabel/internal/sam2"
 	"mylabel/internal/store"
 	"mylabel/locales"
 )
@@ -103,6 +105,25 @@ type App struct {
 	// tool starts it at a zoom in (docs/phase6-design.md §3).
 	zoomOutNext bool
 
+	// AI assist (docs/phase7-design.md §6). sam is the native client; nil means
+	// Detect found no library next to the executable, so the tool does not exist
+	// at all. aiPoints are the foreground points collected so far (image pixels),
+	// aiRectMode the output mode (false = polygon, true = bounding box), aiBusy
+	// the single inference in flight, and aiGen the generation counter that lets a
+	// result recognize it arrived too late. aiEmb is the encoder embedding cached
+	// for images[aiEmbFor] (-1 = none): it is released when the image, the folder
+	// or the app goes away.
+	sam        *sam2.Client
+	aiRectMode bool
+	aiPoints   []Point
+	aiBusy     bool
+	aiGen      uint64
+	aiEmb      sam2.Embedding
+	aiEmbFor   int
+	// aiPredict replaces the real pipeline in tests: it answers one inference for
+	// a prompt and needs no DLL (aitool.go).
+	aiPredict aiPredictFunc
+
 	// Click-by-click draft in progress (ModePolyCreate): the vertices clicked so
 	// far, in image pixels — a polygon's, or the four corners of a rotated box
 	// (§5.2) — and the pointer's image position the rubber band follows.
@@ -142,7 +163,7 @@ type App struct {
 
 // New returns an initialized App.
 func New() *App {
-	return &App{
+	a := &App{
 		selImg:      -1,
 		loaded:      -1,
 		selSet:      make(map[int]bool),
@@ -152,6 +173,23 @@ func New() *App {
 		thumbs:      make(map[string]*ui.Bitmap),
 		dirtyImages: make(map[int64]bool),
 		showLabels:  true,
+		aiEmbFor:    -1,
+	}
+	a.detectSAM2()
+	return a
+}
+
+// detectSAM2 creates the native client when the library sits next to the
+// executable (docs/phase7-design.md §4). Detect only stats three files and never
+// loads the DLL, so a machine without them pays nothing and the AI tool stays
+// hidden: every entry point of the feature hangs off a.sam being non-nil.
+func (a *App) detectSAM2() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	if cfg, ok := sam2.Detect(filepath.Dir(exe)); ok {
+		a.sam = sam2.New(cfg)
 	}
 }
 
@@ -412,6 +450,10 @@ func (a *App) openDir(dir string) {
 	a.tool = ToolSelect
 	a.polyDraft = nil
 	a.hasHover = false
+	// The AI assist belongs to the images of the folder being replaced: the
+	// collected points and the cached embedding do not survive it (§6).
+	a.aiDropPoints()
+	a.aiReleaseEmbedding()
 	a.undoStack = nil
 	a.redoStack = nil
 	a.dirty = false
@@ -555,6 +597,15 @@ func (a *App) Close() {
 	}
 	_ = a.save()
 	a.closeStore()
+	// The AI assist goes with the app: the collected points, the cached embedding
+	// and then the native client, in that order — an embedding has to be released
+	// before the client it came from closes (docs/phase7-design.md §6).
+	a.aiDropPoints()
+	a.aiBusy = false
+	a.aiReleaseEmbedding()
+	if a.sam != nil {
+		a.sam.Close()
+	}
 }
 
 // View builds the interface from the state, on the main thread, every frame.
@@ -702,6 +753,11 @@ func (a *App) thumbStrip(c *ui.Context) {
 		a.mode = ModeIdle
 		a.polyDraft = nil
 		a.hasHover = false
+		// The AI assist's points and its cached embedding name the image being
+		// left, so both go (docs/phase7-design.md §6). A/D reach here too: goImage
+		// only moves selImg and leaves the load to this reconcile.
+		a.aiDropPoints()
+		a.aiReleaseEmbedding()
 		// The properties dialog and the annotations' menus name an annotation of
 		// the image being left.
 		a.closeProps()

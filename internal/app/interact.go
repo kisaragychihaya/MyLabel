@@ -84,7 +84,8 @@ func (a *App) pointerImage(x, y float32) Point {
 // pointer tool selects the annotation under it, moves it, drags its handles and
 // vertices; the creation tools always start a new annotation, whether the press
 // landed on empty canvas or on an existing one; the hand pans, the zoom tool arms
-// one click and the marquee drags a selection rectangle. Shift turns a press on
+// one click and the marquee drags a selection rectangle. The AI tool collects a
+// foreground point per press (docs/phase7-design.md §2). Shift turns a press on
 // empty canvas into that marquee in every tool (§5). A right click opens the
 // annotation's z-order menu instead, and a click on a category chip selects — or,
 // double-clicked, re-categorizes — its annotation, in every tool.
@@ -172,6 +173,12 @@ func (a *App) pointerDown(ev ui.InputEvent) bool {
 		case a.tool == ToolZoom:
 			a.mode = ModeZoomClick
 			a.drag = dragState{annIndex: -1, handle: -1, start: Point{X: float64(ev.X), Y: float64(ev.Y)}}
+			return true
+		case a.tool == ToolAI:
+			// The AI tool collects foreground points instead of drawing: the
+			// annotation under the pointer is ignored, as it is for the other
+			// creation tools (docs/phase7-design.md §2).
+			a.aiClick(p, ev.Clicks)
 			return true
 		case isCreationTool(a.tool):
 			// A pure create: the annotation under the pointer, if any, is ignored.
@@ -631,10 +638,10 @@ func (a *App) keyDown(ev ui.InputEvent) bool {
 	if ev.Mods&ui.Ctrl != 0 && ev.Key == ui.KeyB {
 		return a.carryPrevImage()
 	}
-	// A/D switch images, F refits the view, V/H/Z/M pick a tool: only without
-	// modifiers, so the Ctrl+A/Ctrl+D/Ctrl+Z combinations above and in View keep
-	// their single meaning (docs/phase6-design.md §1, §6.1). Z, like the strip's
-	// zoom button, flips the zoom direction once that tool is active.
+	// A/D switch images, F refits the view, V/H/Z/M pick a tool and S the AI one:
+	// only without modifiers, so the Ctrl+A/Ctrl+D/Ctrl+Z combinations above and in
+	// View keep their single meaning (docs/phase6-design.md §1, §6.1). Z, like the
+	// strip's zoom button, flips the zoom direction once that tool is active.
 	if ev.Mods == 0 {
 		switch ev.Key {
 		case ui.KeyA:
@@ -654,6 +661,14 @@ func (a *App) keyDown(ev ui.InputEvent) bool {
 			return true
 		case ui.KeyM:
 			a.chooseTool(ToolMarquee)
+			return true
+		case ui.KeyS:
+			// S picks the AI tool; a machine without the native library has no
+			// such tool, so the key does nothing there (docs/phase7-design.md §2).
+			if !a.aiReady() {
+				return false
+			}
+			a.chooseTool(ToolAI)
 			return true
 		}
 	}
@@ -810,8 +825,26 @@ func (a *App) keyUp(ev ui.InputEvent) bool {
 }
 
 // cancelDrag reverts the gesture in progress (Escape): the annotations the
-// drag moved go back to their snapshots, a draft or marquee is dropped.
+// drag moved go back to their snapshots, a draft or marquee is dropped, and the
+// AI tool's collected points are dropped once no gesture is left to cancel
+// (docs/phase7-design.md §2).
 func (a *App) cancelDrag() bool {
+	if a.cancelGesture() {
+		return true
+	}
+	// The collected foreground points are the AI tool's draft: Escape drops them,
+	// and any inference still running for them comes back to a bumped generation
+	// and is discarded (§6).
+	if len(a.aiPoints) > 0 {
+		a.aiDropPoints()
+		return true
+	}
+	return false
+}
+
+// cancelGesture reverts the mode-driven half of cancelDrag: the drag, the draft,
+// the marquee or the pan in progress.
+func (a *App) cancelGesture() bool {
 	switch a.mode {
 	case ModeCreating:
 		a.draft = Ann{}
@@ -856,7 +889,9 @@ func (a *App) endPan() {
 // that is not active is switched to, and the zoom tool, which is already active,
 // has its direction flipped instead — that button and Z are the only way to
 // choose the direction, as a canvas click just follows it
-// (docs/phase6-design.md §3). A gesture in progress belongs to the tool that
+// (docs/phase6-design.md §3). The AI tool works the same way: choosing it again
+// flips its output between the polygon outline and the bounding box
+// (docs/phase7-design.md §2). A gesture in progress belongs to the tool that
 // started it, so choosing waits for its end, as setTool does.
 func (a *App) chooseTool(t Tool) {
 	if a.dragInProgress() {
@@ -866,14 +901,18 @@ func (a *App) chooseTool(t Tool) {
 		a.setTool(t)
 		return
 	}
-	if t == ToolZoom {
+	switch t {
+	case ToolZoom:
 		a.zoomOutNext = !a.zoomOutNext
+	case ToolAI:
+		a.aiRectMode = !a.aiRectMode
 	}
 }
 
 // setTool switches the tool, dropping whatever the tool being left had in
 // flight: a gesture in progress keeps the tool it started with, and a draft or a
-// rubber band is dropped as Escape drops it (docs/phase6-design.md §1).
+// rubber band is dropped as Escape drops it (docs/phase6-design.md §1). Leaving
+// the AI tool also drops the points it collected (docs/phase7-design.md §2).
 func (a *App) setTool(t Tool) {
 	if t == a.tool {
 		return
@@ -882,6 +921,12 @@ func (a *App) setTool(t Tool) {
 	// belongs to the tool that started it: the switch waits for its end.
 	if a.dragInProgress() {
 		return
+	}
+	// The AI tool's points are its draft, and a draft belongs to the tool that
+	// collected it: leaving drops it, as cancelDrag does. This runs before
+	// cancelDrag, whose pan case would otherwise let the points survive a switch.
+	if a.tool == ToolAI && t != ToolAI {
+		a.aiDropPoints()
 	}
 	a.cancelDrag()
 	// A pan that interrupted a polygon draft brings it back on endPan, and a

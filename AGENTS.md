@@ -36,7 +36,7 @@ internal/app/           全部应用代码（单包）
   category.go           类别面板 + 12 色色板 Modal + 生成式调色板（黄金角 HSV）/增删改名换色/删除保护（cmdDeleteCategory）；新工作区类别为空，空表时面板显示提示、curCat=-1（clampCurCat）
   status.go             图片状态：Ctrl+D 切换、首次编辑自动 new→labeling、缩略图圆点颜色
   canvas.go             画布：Box + 单 Draw 回调绘制全部标注（禁止一个标注一个 Element）；poly 用 FillPath+StrokePolyline；类别名 chip 画在画布 DIP 层（≤500 条全画，>500 只画选中），尺寸由 canvasView 每帧按类别名测一次缓存进 App（chipBounds 是绘制与命中共用的唯一几何）
-  interact.go           HandleInput 交互状态机（rect/poly/obb 创建、移动/resize/旋转、顶点编辑、框选、整组移动、快捷键、双击开属性、chip 命中、右键 z 序菜单）
+  interact.go           HandleInput 交互状态机（rect/poly/obb 创建、移动/resize/旋转、顶点编辑、框选、整组移动、快捷键、双击开属性、chip 命中、右键 z 序菜单；ToolAI 的单击取点走 aitool.go）
   geom.go               纯几何：局部坐标变换、手柄位置、zoomAroundPoint、resizeHandle/rotateTo、annBounds、obbFromPoints
   polygon.go            多边形纯几何：pointInPolygon/nearestEdge/顶点增删/平移（全部返回新切片，不改入参）
   hit.go                命中测试：顶点 > 手柄 > 边 > 内部（poly 用 pointInPolygon），z 序倒序；chipHitAt 只命中画出来的 chip
@@ -52,13 +52,16 @@ internal/app/           全部应用代码（单包）
   openir.go             openDir 时根下 project.json 的直接导入（优先于遗留 JSON，库中已有标注则跳过）
   nav.go                A/D 图片导航（goImage 只设 selImg，加载交给 thumbStrip 调和）+ F 适应窗口（fitWindow 置 fitOnLoad）
   carry.go              Ctrl+B 沿用上一张标注（carryPrevImage 深拷贝+换 ID+整批选中，cmdCarry 一条 undo）
-  toolstrip.go          左侧 Photoshop 式工具条（toolstripWidth 44，7 按钮：指针/抓手/缩放/选框‖创建三件套）：toolSpecs 一行一工具（新工具加一行即可），图标按钮 + Label/Tooltip，编辑/视图类与创建类之间 Divider
-  icons.go              七个手写 24×24 stroke SVG（currentColor，ui.MustParseSVG）
+  toolstrip.go          左侧 Photoshop 式工具条（toolstripWidth 44，7 按钮：指针/抓手/缩放/选框‖创建三件套，检测到 SAM2 时由 stripSpecs 追加第 8 个 AI 按钮）：toolSpecs 一行一工具（新工具加一行即可），图标按钮 + Label/Tooltip，编辑/视图类与创建类之间 Divider
+  icons.go              七个手写 24×24 stroke SVG（currentColor，ui.MustParseSVG）+ AI 工具的两个变体（魔棒+火花 / 魔棒+方框，不在 toolSpecs 里）
+  aitool.go             SAM2 智能标注：aiClick（取前景点）、aiGenerate（编码/推理，win==nil 内联、否则 goroutine 经 win.Update）、aiFinish（代计数比对、embedding 缓存收编/释放）、buildAIAnn（mask→Ann 纯函数：最大连通域→BBox 或 TraceContour+Simplify→映射图像像素）、readRGB24；aiPredict 字段是测试注入点
   opendir.go            resolveOpenDir：Ultralytics 布局 X/images/train 或 X/images 自动上提到数据集根 X（需同级 labels/），不递归上提
   attributes.go         标注属性面板：双击单选标注打开，暂存类别+属性键值对，确定一次性提交为一条 undo
   annmenu.go            作用于单条标注的两个菜单（App 字段 catPick/zMenu，按 Image+ID 认人）：双击 chip = 类别单选列表（点一行即应用，一条 cmdModify）；右键标注 = z 序菜单（上移一层/下移一层/移到顶部/移到底部，一条 cmdReorder，到顶/到底的项 Disabled），面板用 ui.Popover + ui.Button
   close.go              ConfirmClose 关闭守卫（保存失败才弹三选；无窗口直接返回 save 结果）
   drop.go               拖文件/文件夹进窗口打开
+internal/maskgeom/      mask 几何纯函数：BBox / LargestComponent（4 连通）/ TraceContour（Moore，Jacob 停止准则）/ Simplify（Douglas-Peucker），坐标为 mask 网格像素
+internal/sam2/          sam2_ncnn.dll 的纯 Go FFI 客户端（`//go:build windows`，syscall.NewLazyDLL，CGO_ENABLED=0）；types.go 放共用类型、sam2_stub.go（`//go:build !windows`）提供同签名桩（Detect 恒 false），故 `-platform web` 也能编
 internal/store/         SQLite 仓储（categories/images/annotations 三表，schema v4 含 attrs，非并发安全，只在主线程用）；标注顺序 = Anns 切片序（= 绘制序），LoadImages 用 ORDER BY rowid 读、ReplaceAnns 按切片序插入，故保存/重开保持顺序（改这两处会破坏 z 序）
 internal/imaging/       递归扫描 + JPEG EXIF 物理转正 + 尺寸 + sha256
 internal/ir/            IR 交换模型（bbox/polygon(rings)/rotated_bbox + attributes）、Validate/Normalize、project.json + ir/*.json 读写
@@ -73,6 +76,7 @@ docs/phase2-design.md   阶段 2（seg/多选/类别面板/状态标记）契约
 docs/phase3-design.md   阶段 3（IR/导入器/属性/obb 四点）契约
 docs/phase4-design.md   阶段 4（exporter 三格式 + 导出向导）契约
 docs/phase5-design.md   阶段 5（导航/沿用/视觉回归/导出三遗留/i18n）契约
+docs/phase7-design.md   阶段 7（SAM2 智能标注辅助）契约
 开发计划书.md           总体开发计划与进度追踪
 ```
 
@@ -97,7 +101,7 @@ docs/phase5-design.md   阶段 5（导航/沿用/视觉回归/导出三遗留/i1
 
 ## 交互约定（labelme 风格，改动需保持）
 
-左侧工具条（Photoshop 式，单一激活工具，启动默认指针）：指针 (V) = 全部编辑交互（单击选中/拖动/手柄 resize/旋转/顶点编辑/双击开属性面板）、抓手 (H) = 左键任意处平移不选中、缩放 (Z) = 方向由工具条缩放图标/再按 Z 切换（chooseTool，图标 +/− 随动），画布单击按当前方向锚点缩放（1.25×/0.8×，不翻转状态；Alt 瞬时反向不改状态；切入工具重置为放大；位移超阈值视为误拖不缩放）、选框 (M) = 左键拖拽框选（起点在标注上也进 marquee，原位单击清空选择）、矩形 (R)/多边形 (P)/旋转框 (O) = 纯创建工具（点击任何位置——包括已有标注上——都直接新建，不做选中/编辑；新建后不再自动选中）；切到创建工具时清空选择（手柄不画、Delete/数字键自然无效），指针↔选框间切换保留选择；切工具丢弃进行中草稿/橡皮筋，拖动手势中不切；Space+左键拖拽 = 抓手平移（任意工具下）；滚轮 = 垂直平移；Shift+滚轮 = 水平平移；Ctrl+滚轮 = 缩放；中键拖拽 = 平移；Shift+空白拖拽 = 框选（任意工具下）；空类别表下三种创建工具都不开草稿，提示「请先在右侧面板添加类别」；chip 单选/双击类别列表与右键 z 序菜单在七个工具下都可用（双击标注本体开属性面板仅指针工具）；旋转框 = 点 4 个角成框（第 4 点即成，Esc 取消、Backspace 删点）；多边形：单击加点、点首顶点/回车/双击闭合（≥3 点）、Esc 取消、Backspace 删末点、拖顶点编辑、Ctrl+点删顶点、双击边插顶点、拖内部整体移动；双击单选标注（rect 任意处、poly 内部）= 属性面板；类别名 chip = 独立控件，优先于其下标注的一切（单选 = 选中该条、双击 = 类别单选列表弹窗，点一行立即改类别并关闭，Esc/取消不改；标签隐藏或 >500 条未选中时不参与命中）；右键标注 = z 序菜单（上移一层/下移一层/移到顶部/移到底部 各一条 undo，已到顶/到底的项置灰；手势或草稿进行中右键无反应，点空白处不弹，点外面/Esc 关闭且不选中、不建草稿）；Ctrl+点击 = 多选切换；Shift+空白拖拽 = 框选；Ctrl+A = 全选；Delete/1-9 作用于全部选中（各一条批量 undo）；拖任一选中项 = 整组平移；resize/旋转/顶点编辑仅单选可用；Esc = 先取消手势再清空选择；Ctrl+D = 标记当前图 done/new；Ctrl+S/Z/Shift+Z = 保存/撤销/重做；A/D = 上一张/下一张（无修饰键才生效，越界不循环只在状态栏提示；拖动手势中拒绝）；Ctrl+B = 沿用上一张标注（深拷贝追加+整批选中，一条 undo）；F = 重新适应窗口居中（无修饰键）；L 或工具栏「标签」= 显示/隐藏类别名 chip（默认显示）。加载图片后自动"适应窗口居中"并把键盘焦点移到画布。
+左侧工具条（Photoshop 式，单一激活工具，启动默认指针）：指针 (V) = 全部编辑交互（单击选中/拖动/手柄 resize/旋转/顶点编辑/双击开属性面板）、抓手 (H) = 左键任意处平移不选中、缩放 (Z) = 方向由工具条缩放图标/再按 Z 切换（chooseTool，图标 +/− 随动），画布单击按当前方向锚点缩放（1.25×/0.8×，不翻转状态；Alt 瞬时反向不改状态；切入工具重置为放大；位移超阈值视为误拖不缩放）、选框 (M) = 左键拖拽框选（起点在标注上也进 marquee，原位单击清空选择）、矩形 (R)/多边形 (P)/旋转框 (O) = 纯创建工具（点击任何位置——包括已有标注上——都直接新建，不做选中/编辑；新建后不再自动选中）、智能标注 (S) = SAM2 点选工具，仅当 exe 旁（或环境变量）检测到 DLL 与两个模型时出现为第 8 个按钮：未激活 → 激活，已激活 → 多边形 ⇄ 矩形切换（图标与 Tooltip 随动），画布单击追加一个前景点（画布上画十字），双击以已收集点为 prompt 跑推理、生成一条 cmdCreate 标注（第二击不新增点，只把最后一点移到指针处），Esc 清点并丢弃在途结果，切工具/切图/openDir 清点（切图与开目录还释放缓存的 embedding），空类别表同样被拦截；切到创建工具时清空选择（手柄不画、Delete/数字键自然无效），指针↔选框间切换保留选择；切工具丢弃进行中草稿/橡皮筋，拖动手势中不切；Space+左键拖拽 = 抓手平移（任意工具下）；滚轮 = 垂直平移；Shift+滚轮 = 水平平移；Ctrl+滚轮 = 缩放；中键拖拽 = 平移；Shift+空白拖拽 = 框选（任意工具下）；空类别表下三种创建工具都不开草稿，提示「请先在右侧面板添加类别」；chip 单选/双击类别列表与右键 z 序菜单在七个工具下都可用（双击标注本体开属性面板仅指针工具）；旋转框 = 点 4 个角成框（第 4 点即成，Esc 取消、Backspace 删点）；多边形：单击加点、点首顶点/回车/双击闭合（≥3 点）、Esc 取消、Backspace 删末点、拖顶点编辑、Ctrl+点删顶点、双击边插顶点、拖内部整体移动；双击单选标注（rect 任意处、poly 内部）= 属性面板；类别名 chip = 独立控件，优先于其下标注的一切（单选 = 选中该条、双击 = 类别单选列表弹窗，点一行立即改类别并关闭，Esc/取消不改；标签隐藏或 >500 条未选中时不参与命中）；右键标注 = z 序菜单（上移一层/下移一层/移到顶部/移到底部 各一条 undo，已到顶/到底的项置灰；手势或草稿进行中右键无反应，点空白处不弹，点外面/Esc 关闭且不选中、不建草稿）；Ctrl+点击 = 多选切换；Shift+空白拖拽 = 框选；Ctrl+A = 全选；Delete/1-9 作用于全部选中（各一条批量 undo）；拖任一选中项 = 整组平移；resize/旋转/顶点编辑仅单选可用；Esc = 先取消手势再清空选择；Ctrl+D = 标记当前图 done/new；Ctrl+S/Z/Shift+Z = 保存/撤销/重做；A/D = 上一张/下一张（无修饰键才生效，越界不循环只在状态栏提示；拖动手势中拒绝）；Ctrl+B = 沿用上一张标注（深拷贝追加+整批选中，一条 undo）；F = 重新适应窗口居中（无修饰键）；L 或工具栏「标签」= 显示/隐藏类别名 chip（默认显示）。加载图片后自动"适应窗口居中"并把键盘焦点移到画布。
 
 ## 测试约定
 
@@ -109,6 +113,8 @@ docs/phase5-design.md   阶段 5（导航/沿用/视觉回归/导出三遗留/i1
 - Tester 的连击计数是**包内共享、跨测试保留**的（同一个 Tester 复用，时钟只有 `tt.Advance` 才走）：测试开头先 `tt.Advance` 断开上一次的点击序列，否则第一次点击会带着 Clicks=2 进来（会被当成双击）。
 - 修改交互行为必须同步更新对应回归测试（见 `interact_test.go` 命名风格 `TestXxxYyy`）。
 - 文案断言：`internal/app` 的 `TestMain` 钉死 `MYGO_LOCALE=zh-Hans`（该包有大量中文精确断言）；断言文案时优先查 `locales.*` 表而非硬编码（见 `main_test.go`）；`MYGO_LOCALE=en go test ./...` 必须也能全绿。
+- AI 工具（`aitool_test.go`）不依赖真实 DLL、不用 `time.Sleep`：`a.sam = sam2.New(sam2.Config{...})`（`sam2.New` 不加载任何东西）即可让第 8 个按钮出现，`a.aiPredict` 注入合成 mask；无窗口时 `aiGenerate` 内联跑完，只有过期结果才直接调 `aiFinish` 模拟「goroutine 晚回来」。
+
 - 视觉回归（`visual_test.go`）断颜色不断字形：像素按"目标色 at 覆盖率 over 底色"拟合（容差 ±2），采样避开文字区；画布尺寸有守卫，场景坐标失效会报"装不下测试图片"而非假绿。
 
 ## 已知限制（PoC 遗留，见开发计划书 §6 阶段 0 记录）
@@ -122,4 +128,5 @@ docs/phase5-design.md   阶段 5（导航/沿用/视觉回归/导出三遗留/i1
 - 缩放工具只有单击/Alt+单击（无 scrubby-drag 与框选放大）；工具条不可自定义
 - 5000+ 标注时 CPU 光栅掩码图集是瓶颈（真机 GPU 无此问题）
 - UI 文案走 `locales/` 消息目录（zh-Hans 源 + en）；store/importer/exporter/ir/imaging 的 error 字符串保持中文（经 err.Error() 进 UI），属刻意范围外
+- 智能标注只在 Windows 且 exe 旁有 `sam2_ncnn.dll` + `models/sam2_{encoder,decoder}_fixed.ncnn.param`（或有 `SAM2_DLL`/`SAM2_ENCODER`/`SAM2_DECODER`/`SAM2_MODEL_DIR` 环境变量）时出现，非 Windows 走 `internal/sam2` 的桩、工具恒隐藏；只做正点提示（无负点/框提示/交互精炼/mask 预览/模型设置界面），embedding 只按「当前图」缓存一份，首张图首次推理要等编码（秒级）
 - 万级图片与 >8000px 大图已压测（阶段 5 W5，无窗口 headless 计时）：10000 张 640×480 openDir（扫描+EXIF+sha256+SQLite 同步）≈2.3s，单张 640×480 loadImage ≈2-3ms；8192×8192 分块大图 loadImage ≈1.1s。缩略图条万级滚动的主观流畅度与 GUI 内大图缩放/平移未自动化，需人工抽查

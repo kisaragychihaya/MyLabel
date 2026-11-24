@@ -4,13 +4,16 @@ import "github.com/egoist/mygo/ui"
 
 // The tool strip's icons (docs/phase6-design.md §2): seven hand-drawn 24×24
 // outlines, stroked in the element's text color, so the button paints them in
-// the foreground of an ordinary button and of an active (primary) one alike.
+// the foreground of an ordinary button and of an active (primary) one alike. The
+// AI tool's two variants (docs/phase7-design.md §7) use the same wrapper but are
+// not part of toolSpecs, which stays the seven unconditional buttons.
 //
 // Each is its own drawing, drawn as outlines only: an arrow pointer for the
 // select tool, a hand for the pan tool, a magnifier with a plus for the zoom
 // tool, a dashed box for the marquee, a box for the rectangle tool, a pentagon
-// for the polygon tool and a turned box for the rotated box tool. Adding a tool
-// to the strip means adding one line here.
+// for the polygon tool, a turned box for the rotated box tool, and a wand — with
+// a spark for the AI tool's polygon mode, with a box for its bounding-box mode.
+// Adding a tool to the strip means adding one line here.
 
 // toolIcon wraps an icon's shapes in the attributes every tool icon shares:
 // 24×24, no fill, a 2 DIP round-capped currentColor stroke.
@@ -45,4 +48,13 @@ var (
 	iconToolPoly = toolIcon(`<path d="M12 3.5 20.5 9.8 17.3 20.5H6.7L3.5 9.8Z"/>`)
 	// iconToolObb is a box turned off the axes.
 	iconToolObb = toolIcon(`<rect x="4.5" y="8.5" width="15" height="7" rx="1.5" transform="rotate(-22 12 12)"/>`)
+	// iconToolAIPoly is a wand throwing sparks: the AI tool drawing a polygon
+	// outline, and iconToolAIRect's sibling.
+	iconToolAIPoly = toolIcon(`<path d="M3.5 20.5 11 13"/>` +
+		`<path d="M16 3.5v7M12.5 7h7"/>` +
+		`<path d="M19.5 15v3.5M17.75 16.75h3.5"/>`)
+	// iconToolAIRect is the same wand with a box beside it: the AI tool producing
+	// the mask's bounding box.
+	iconToolAIRect = toolIcon(`<path d="M3.5 20.5 11 13"/>` +
+		`<rect x="12.5" y="3.5" width="8.5" height="8.5" rx="1"/>`)
 )

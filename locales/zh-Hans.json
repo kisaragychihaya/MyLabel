@@ -108,6 +108,10 @@
   "@toolStripObb": {
     "description": "The tool strip's rotated box tool button: its accessible name and its tooltip, the tool's name and its shortcut."
   },
+  "toolStripAI": "智能标注 (S)",
+  "@toolStripAI": {
+    "description": "The tool strip's AI tool button: its accessible name and its tooltip, the tool's name and its shortcut. The tooltip appends the shape the next double-click will create."
+  },
   "statusOpened": "{layout, select, widen {检测到 YOLO 数据集布局，已改为打开数据集根，} other {}}已打开 {dir}（{images, plural, other {# 张图片}}）{rotated, plural, =0 {} other {，已转正 # 张}}{migrated, plural, =0 {} other {，已迁移旧 JSON 标注 # 张}}{imported, plural, =0 {} other {，已导入 IR 项目 # 张图片}}{importedAnns, plural, =0 {} other { # 条标注}}{newCategories, plural, =0 {} other {（新建类别 # 个）}}{skippedAnns, plural, =0 {} other {，# 条标注无法转换已跳过}}",
   "@statusOpened": {
     "description": "The status bar, after a folder of images opened. The clauses whose count is zero are left out.",
@@ -467,6 +471,38 @@
   "statusObbTooSmall": "旋转框太小，已放弃",
   "@statusObbTooSmall": {
     "description": "The status bar, when a rotated box drag was too small to keep."
+  },
+  "statusAIEncoding": "正在编码图像，请稍候…",
+  "@statusAIEncoding": {
+    "description": "The status bar, while the AI assist encodes the image its prompt will be decoded against; the first run on an image pays this."
+  },
+  "statusAIDecoding": "正在推理…",
+  "@statusAIDecoding": {
+    "description": "The status bar, while the AI assist runs the model over the collected points; the image was already encoded."
+  },
+  "statusAIFailed": "智能标注失败：{err}",
+  "@statusAIFailed": {
+    "description": "The status bar, when the AI assist could not produce a mask.",
+    "placeholders": {
+      "err": {
+        "type": "String",
+        "example": "sam2: sam2_decoder_decode: ..."
+      }
+    }
+  },
+  "statusAIDone": "已生成{kind}标注",
+  "@statusAIDone": {
+    "description": "The status bar, after the AI assist created an annotation: the shape it made.",
+    "placeholders": {
+      "kind": {
+        "type": "String",
+        "example": "多边形"
+      }
+    }
+  },
+  "statusAINoMask": "未检出目标，请换个位置再点一次",
+  "@statusAINoMask": {
+    "description": "The status bar, when the AI assist returned a mask with no foreground at the collected points."
   },
   "statusNewImage": "新图",
   "@statusNewImage": {
