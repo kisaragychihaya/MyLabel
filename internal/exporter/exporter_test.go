@@ -1,7 +1,9 @@
 package exporter
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,7 +42,7 @@ func TestWriteExportAssemblesAtomically(t *testing.T) {
 
 	var lastDone, lastTotal int
 	plan := testPlan()
-	if err := WriteExport(out, imgRoot, plan, func(done, total int) { lastDone, lastTotal = done, total }); err != nil {
+	if err := WriteExport(context.Background(), out, imgRoot, plan, func(done, total int) { lastDone, lastTotal = done, total }); err != nil {
 		t.Fatalf("WriteExport: %v", err)
 	}
 	if want := len(plan.Copies) + len(plan.Files) + 1; lastDone != want || lastTotal != want {
@@ -75,7 +77,7 @@ func TestWriteExportRefusesExistingDir(t *testing.T) {
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := WriteExport(out, root, testPlan(), nil); err == nil || !strings.Contains(err.Error(), "已存在") {
+	if err := WriteExport(context.Background(), out, root, testPlan(), nil); err == nil || !strings.Contains(err.Error(), "已存在") {
 		t.Fatalf("err = %v, want 已存在", err)
 	}
 }
@@ -84,7 +86,7 @@ func TestWriteExportCleansTmpOnError(t *testing.T) {
 	root := t.TempDir()
 	out := filepath.Join(root, "out")
 	// imgRoot has no a.jpg: the copy fails and the tmp dir must be removed.
-	err := WriteExport(out, root, testPlan(), nil)
+	err := WriteExport(context.Background(), out, root, testPlan(), nil)
 	if err == nil {
 		t.Fatal("want copy failure")
 	}
@@ -93,6 +95,73 @@ func TestWriteExportCleansTmpOnError(t *testing.T) {
 	}
 	if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
 		t.Fatalf("out dir should not exist, stat err = %v", statErr)
+	}
+}
+
+// TestWriteExportCancelsCleansUpAndWraps: cancelling mid-export removes the
+// temporary directory, leaves no output, and reports errors.Is context.Canceled
+// (docs/phase5-design.md §5.1).
+func TestWriteExportCancelsCleansUpAndWraps(t *testing.T) {
+	root := t.TempDir()
+	imgRoot := filepath.Join(root, "imgs")
+	if err := os.MkdirAll(imgRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(imgRoot, "a.jpg"), []byte("jpeg-bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(root, "out")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Cancel after the first tick (the image copy), so the files loop sees it.
+	err := WriteExport(ctx, out, imgRoot, testPlan(), func(done, total int) { cancel() })
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, 期望 errors.Is(err, context.Canceled)", err)
+	}
+	if !strings.Contains(err.Error(), "exporter:") {
+		t.Fatalf("err = %q, 期望带 exporter: 前缀", err)
+	}
+	if _, statErr := os.Stat(out + tmpSuffix); !os.IsNotExist(statErr) {
+		t.Fatalf("tmp dir should be cleaned, stat err = %v", statErr)
+	}
+	if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
+		t.Fatalf("out dir should not exist, stat err = %v", statErr)
+	}
+}
+
+// TestWriteExportPreCanceledWritesNothing: a ctx canceled before the call fails
+// on the first iteration and still cleans up.
+func TestWriteExportPreCanceledWritesNothing(t *testing.T) {
+	root := t.TempDir()
+	out := filepath.Join(root, "out")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := WriteExport(ctx, out, root, testPlan(), nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, 期望 context.Canceled", err)
+	}
+	if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
+		t.Fatalf("out dir should not exist, stat err = %v", statErr)
+	}
+}
+
+// TestWriteExportNilContext: a nil ctx is treated as context.Background().
+func TestWriteExportNilContext(t *testing.T) {
+	root := t.TempDir()
+	imgRoot := filepath.Join(root, "imgs")
+	if err := os.MkdirAll(imgRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(imgRoot, "a.jpg"), []byte("jpeg-bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(root, "out")
+	if err := WriteExport(nil, out, imgRoot, testPlan(), nil); err != nil {
+		t.Fatalf("WriteExport(nil ctx): %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(out, manifestName)); err != nil {
+		t.Fatalf("manifest: %v", err)
 	}
 }
 

@@ -1,6 +1,7 @@
 package exporter
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"os"
@@ -444,7 +445,7 @@ func TestBuildYOLOExportIntegration(t *testing.T) {
 	}
 	out := filepath.Join(root, "out")
 	var done, total int
-	if err := WriteExport(out, imgRoot, plan, func(d, tt int) { done, total = d, tt }); err != nil {
+	if err := WriteExport(context.Background(), out, imgRoot, plan, func(d, tt int) { done, total = d, tt }); err != nil {
 		t.Fatalf("WriteExport: %v", err)
 	}
 	if done != total || total != len(plan.Copies)+len(plan.Files)+1 {

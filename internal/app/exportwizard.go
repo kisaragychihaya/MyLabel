@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -144,7 +145,8 @@ func (a *App) openExportWizard() {
 }
 
 // closeExportWizard closes the dialog and forgets the run. A background export
-// keeps running: WriteExport is not cancellable (contract §1).
+// keeps running: exporter.WriteExport accepts a ctx, but the wizard does not
+// cancel it yet (docs/phase5-design.md §5.2).
 func (a *App) closeExportWizard() {
 	if a.ex.Busy {
 		a.ex.Open = false
@@ -296,11 +298,11 @@ func (a *App) exportStart() {
 	s.Total = len(s.Plan.Copies) + len(s.Plan.Files) + 1
 	plan, root, win := s.Plan, a.dir, a.win
 	if win == nil {
-		a.finishExport(outDir, exporter.WriteExport(outDir, root, plan, nil))
+		a.finishExport(outDir, exporter.WriteExport(context.Background(), outDir, root, plan, nil))
 		return
 	}
 	go func() {
-		err := exporter.WriteExport(outDir, root, plan, func(done, total int) {
+		err := exporter.WriteExport(context.Background(), outDir, root, plan, func(done, total int) {
 			win.Update(func() {
 				if a.ex.Plan != plan {
 					return // the wizard was reopened meanwhile: drop stale progress

@@ -1,11 +1,12 @@
 // Package exporter turns IR (internal/ir) into YOLO/COCO/VOC dataset
 // folders. The pipeline is two-phase: BuildPlan computes every output file
 // and the dry-run report without touching the disk; WriteExport assembles a
-// Plan into a fresh directory atomically. The binding contract is
-// docs/phase4-design.md.
+// Plan into a fresh directory atomically. The binding contracts are
+// docs/phase4-design.md and docs/phase5-design.md (§5–§7).
 package exporter
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -52,6 +53,9 @@ type SplitPolicy struct {
 	Mode       SplitMode `json:"mode"`
 	TrainRatio float64   `json:"train_ratio,omitempty"` // SplitRandom only
 	Seed       int64     `json:"seed,omitempty"`        // SplitRandom only
+	// Overrides forces individual images (keyed by Image.File) into "train" or
+	// "val" after Mode assignment. Unknown keys and other values are an error.
+	Overrides map[string]string `json:"overrides,omitempty"`
 }
 
 // Options is one export request.
@@ -65,6 +69,11 @@ type Options struct {
 	// VOCDowngradeOBB writes rotated boxes as enclosing bndbox instead of
 	// the robndbox private extension. Lossy; must be an explicit user choice.
 	VOCDowngradeOBB bool `json:"voc_downgrade_obb,omitempty"`
+	// VOCSeg also writes polygon annotations: they keep an enclosing bndbox in
+	// the XML and are additionally rasterised into SegmentationClass/ and
+	// SegmentationObject/ PNG masks (docs/phase5-design.md §6). When false
+	// (the default) polygons are skipped with RuleSegDropped.
+	VOCSeg bool `json:"voc_seg,omitempty"`
 }
 
 // Lossy rule identifiers shared by the report and the manifest.
@@ -304,7 +313,17 @@ const (
 // existing outDir is an error — exports never merge or overwrite. progress,
 // when non-nil, is called after every copied image, written file, and the
 // manifest, with total == len(Copies)+len(Files)+1.
-func WriteExport(outDir, imgRoot string, plan *Plan, progress func(done, total int)) error {
+//
+// ctx cancels the export at file granularity (docs/phase5-design.md §5.1):
+// every iteration checks it first, and a cancellation removes the temporary
+// directory and returns an error wrapping ctx.Err(), so errors.Is(err,
+// context.Canceled) holds and nothing is left behind. A nil ctx means
+// context.Background(). Copying one file never responds to cancellation
+// mid-stream — one file is the finest granularity, which the PoC accepts.
+func WriteExport(ctx context.Context, outDir, imgRoot string, plan *Plan, progress func(done, total int)) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if plan == nil {
 		return errors.New("exporter: 计划为 nil")
 	}
@@ -340,6 +359,9 @@ func WriteExport(outDir, imgRoot string, plan *Plan, progress func(done, total i
 
 	buf := make([]byte, copyBufSize)
 	for _, c := range plan.Copies {
+		if err := cancelErr(ctx); err != nil {
+			return cleanup(err)
+		}
 		src, err := cleanRel(c.Src)
 		if err != nil {
 			return cleanup(fmt.Errorf("exporter: 图片源路径非法: %w", err))
@@ -354,6 +376,9 @@ func WriteExport(outDir, imgRoot string, plan *Plan, progress func(done, total i
 		tick()
 	}
 	for _, f := range plan.Files {
+		if err := cancelErr(ctx); err != nil {
+			return cleanup(err)
+		}
 		rel, err := cleanRel(f.Rel)
 		if err != nil {
 			return cleanup(fmt.Errorf("exporter: 文件路径非法: %w", err))
@@ -368,6 +393,9 @@ func WriteExport(outDir, imgRoot string, plan *Plan, progress func(done, total i
 		tick()
 	}
 
+	if err := cancelErr(ctx); err != nil {
+		return cleanup(err)
+	}
 	manifest, err := marshalManifest(plan)
 	if err != nil {
 		return cleanup(err)
@@ -379,6 +407,16 @@ func WriteExport(outDir, imgRoot string, plan *Plan, progress func(done, total i
 
 	if err := os.Rename(tmp, outDir); err != nil {
 		return cleanup(fmt.Errorf("exporter: 改名 %s 失败: %w", outDir, err))
+	}
+	return nil
+}
+
+// cancelErr reports ctx's cancellation as a wrapped error, so callers can test
+// errors.Is(err, context.Canceled). It is checked once per file, never inside a
+// single file's copy.
+func cancelErr(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("exporter: %w", err)
 	}
 	return nil
 }

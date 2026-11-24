@@ -3,6 +3,7 @@ package exporter
 import (
 	"encoding/xml"
 	"fmt"
+	"image"
 	"math"
 	"path"
 	"strconv"
@@ -59,11 +60,13 @@ const vocXMLHeader = `<?xml version="1.0" encoding="UTF-8"?>` + "\n"
 // extension). XML via encoding/xml with the UTF-8 declaration; bndbox
 // coordinates rounded to int, +1 when opts.VOCOneBased. Rotated boxes write
 // robndbox (radians, IR derived cache as-is) unless opts.VOCDowngradeOBB
-// (then enclosing bndbox, RuleObbToBndbox). Polygons are unsupported:
-// skipped with RuleSegDropped plus one summary recorder.warn. Unknown
-// categories drop with RuleDropped. Images without annotations still get an
-// object-less xml. plan.Files must contain every xml and the ImageSets
-// files (val.txt only when the val split is non-empty).
+// (then enclosing bndbox, RuleObbToBndbox). Polygons are skipped with
+// RuleSegDropped unless opts.VOCSeg: then they keep an enclosing bndbox in the
+// XML and are rasterised into SegmentationClass/ and SegmentationObject/ PNG
+// masks too (docs/phase5-design.md §6). Unknown categories drop with
+// RuleDropped. Images without annotations still get an object-less xml.
+// plan.Files must contain every xml, the masks of images with seg objects, and
+// the ImageSets files (val.txt only when the val split is non-empty).
 func buildVOCPlan(proj *ir.Project, images []ir.Image, splits map[string]string, opts Options) (*Plan, error) {
 	cats, index := planCategories(proj.Categories)
 	rec := newRecorder()
@@ -87,6 +90,7 @@ func buildVOCPlan(proj *ir.Project, images []ir.Image, splits map[string]string,
 			Filename: base,
 			Size:     vocSize{Width: img.Width, Height: img.Height, Depth: 3},
 		}
+		var masks vocSegMaskState
 		for _, a := range img.Annotations {
 			cls, known := index[a.Category]
 			if !known {
@@ -94,13 +98,26 @@ func buildVOCPlan(proj *ir.Project, images []ir.Image, splits map[string]string,
 				rec.count(RuleDropped, img.File, a.ID, fmt.Sprintf("未知类别 %q", a.Category))
 				continue
 			}
+			var (
+				obj     vocObject
+				lossy   string
+				clipped bool
+				drop    string
+			)
 			if a.Kind == ir.KindPolygon {
-				plan.Report.AnnotationsDropped++
-				segSkipped++
-				rec.count(RuleSegDropped, img.File, a.ID, ruleMessage(RuleSegDropped))
-				continue
+				if !opts.VOCSeg {
+					plan.Report.AnnotationsDropped++
+					segSkipped++
+					rec.count(RuleSegDropped, img.File, a.ID, ruleMessage(RuleSegDropped))
+					continue
+				}
+				obj, lossy, clipped, drop = vocSegObject(img, a, cats[cls].Name, opts, cls, &masks)
+				if drop == vocSegOverflowDrop {
+					rec.warn(fmt.Sprintf("同一图片的 seg 对象最多 %d 个，超出部分未写入掩码", vocMaskMaxObjects))
+				}
+			} else {
+				obj, lossy, clipped, drop = vocConvert(a, cats[cls].Name, opts, img.Width, img.Height)
 			}
-			obj, lossy, clipped, drop := vocConvert(a, cats[cls].Name, opts, img.Width, img.Height)
 			if drop != "" {
 				plan.Report.AnnotationsDropped++
 				rec.count(RuleDropped, img.File, a.ID, drop)
@@ -124,6 +141,24 @@ func buildVOCPlan(proj *ir.Project, images []ir.Image, splits map[string]string,
 			return nil, err
 		}
 		plan.Files = append(plan.Files, OutFile{Rel: "Annotations/" + stem + ".xml", Data: data})
+
+		// Masks exist only for images that kept at least one seg object: an
+		// empty mask would claim the image has no segments, which VOC reads as
+		// "unannotated" anyway (docs/phase5-design.md §6).
+		if masks.count > 0 {
+			classPNG, err := encodeVOCMask(masks.class)
+			if err != nil {
+				return nil, err
+			}
+			objectPNG, err := encodeVOCMask(masks.object)
+			if err != nil {
+				return nil, err
+			}
+			plan.Files = append(plan.Files,
+				OutFile{Rel: "SegmentationClass/" + stem + ".png", Data: classPNG},
+				OutFile{Rel: "SegmentationObject/" + stem + ".png", Data: objectPNG},
+			)
+		}
 	}
 
 	if segSkipped > 0 {
@@ -142,6 +177,66 @@ func buildVOCPlan(proj *ir.Project, images []ir.Image, splits map[string]string,
 	plan.Report.Lossy = rec.rep.Lossy
 	plan.Report.Warnings = rec.rep.Warnings
 	return plan, nil
+}
+
+// vocSegOverflowDrop is the drop reason for a seg object beyond the per-image
+// object-id limit; buildVOCPlan turns it into one summary warning.
+var vocSegOverflowDrop = fmt.Sprintf("同一图片的 seg 对象超过 %d 个", vocMaskMaxObjects)
+
+// vocSegMaskState is one image's lazily allocated mask pair plus the number of
+// seg objects written into it (object ids are 1..count, in annotation order).
+type vocSegMaskState struct {
+	class  *image.Paletted
+	object *image.Paletted
+	count  int
+}
+
+// vocSegObject renders one polygon as a VOC object (enclosing bndbox) and
+// paints it into the image's masks (docs/phase5-design.md §6). drop is
+// non-empty when the annotation cannot be written; clipped reports clipped
+// geometry (either the bndbox or the rasterised ring).
+func vocSegObject(img ir.Image, a ir.Annotation, name string, opts Options, classIdx int, st *vocSegMaskState) (obj vocObject, lossy string, clipped bool, drop string) {
+	if v := vocClassValue(classIdx); v > vocMaskMaxClass {
+		return vocObject{}, "", false, fmt.Sprintf("类别掩码值 %d 超过上限 %d", v, vocMaskMaxClass)
+	}
+	if img.Width <= 0 || img.Height <= 0 {
+		return vocObject{}, "", false, "图片尺寸无效，无法栅格化"
+	}
+	rings := nonEmptyRings(a.Rings)
+	if len(rings) == 0 {
+		return vocObject{}, "", false, "多边形没有顶点"
+	}
+	x, y, w, h := aabbOfRings(rings)
+	if !(w > 0) || !(h > 0) {
+		return vocObject{}, "", false, "多边形外接框为空"
+	}
+	nx, ny, nw, nh, moved := clipBBox(x, y, w, h, img.Width, img.Height)
+	if !(nw > 0) || !(nh > 0) {
+		return vocObject{}, "", false, "多边形外接框裁剪后为空"
+	}
+	if st.count >= vocMaskMaxObjects {
+		return vocObject{}, "", false, vocSegOverflowDrop
+	}
+	if len(rings) > 1 {
+		lossy = RuleMultiRing
+	}
+
+	if st.class == nil {
+		st.class = newVOCMask(img.Width, img.Height)
+		st.object = newVOCMask(img.Width, img.Height)
+	}
+	ring := bridgeRings(rings)
+	classVal := uint8(vocClassValue(classIdx))
+	painted, ringClipped := rasterizeRing(st.class, ring, classVal)
+	if !painted {
+		return vocObject{}, "", false, "多边形栅格化为空"
+	}
+	st.count++
+	// Later objects overwrite earlier ones in both masks (VOC z order).
+	rasterizeRing(st.object, ring, uint8(st.count))
+
+	obj = vocObject{Name: name, BndBox: vocBox(nx, ny, nw, nh, opts.VOCOneBased)}
+	return obj, lossy, moved || ringClipped, ""
 }
 
 // vocConvert renders one annotation as a VOC object. drop is non-empty when

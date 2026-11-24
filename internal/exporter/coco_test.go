@@ -1,6 +1,7 @@
 package exporter
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -597,7 +598,7 @@ func TestWriteCOCOExportIntegration(t *testing.T) {
 	out := filepath.Join(root, "out")
 
 	var lastDone, lastTotal int
-	if err := WriteExport(out, imgRoot, plan, func(done, total int) { lastDone, lastTotal = done, total }); err != nil {
+	if err := WriteExport(context.Background(), out, imgRoot, plan, func(done, total int) { lastDone, lastTotal = done, total }); err != nil {
 		t.Fatalf("WriteExport: %v", err)
 	}
 	wantTotal := len(plan.Copies) + len(plan.Files) + 1

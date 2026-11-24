@@ -1,6 +1,7 @@
 package exporter
 
 import (
+	"fmt"
 	"math"
 	"math/rand/v2"
 	"slices"
@@ -10,7 +11,7 @@ import (
 )
 
 // assignSplits maps every image File to "train" or "val"
-// (docs/phase4-design.md §3).
+// (docs/phase4-design.md §3, docs/phase5-design.md §7.1).
 //
 // SplitPreserve: a case-insensitive leading "train"/"val" path segment of
 // File — after stripping one optional leading "images/" segment, so an
@@ -19,6 +20,10 @@ import (
 // deterministically with rand.New(rand.NewPCG(seed, seed^0x9E3779B9)), take
 // round(n*TrainRatio) as train — at least 1 train, and at least 1 val when
 // n >= 2. Same input and seed reproduce the same map.
+//
+// pol.Overrides is applied last in both modes: each entry forces that image
+// into the given split. Unknown keys (not in images) and values other than
+// "train"/"val" are errors, so the caller never writes a half-intended split.
 func assignSplits(images []ir.Image, pol SplitPolicy) (map[string]string, error) {
 	out := make(map[string]string, len(images))
 	if pol.Mode == "" || pol.Mode == SplitPreserve {
@@ -32,7 +37,7 @@ func assignSplits(images []ir.Image, pol SplitPolicy) (map[string]string, error)
 				}
 			}
 		}
-		return out, nil
+		return out, applySplitOverrides(out, pol.Overrides)
 	}
 
 	files := make([]string, len(images))
@@ -57,7 +62,34 @@ func assignSplits(images []ir.Image, pol SplitPolicy) (map[string]string, error)
 			out[f] = "val"
 		}
 	}
-	return out, nil
+	return out, applySplitOverrides(out, pol.Overrides)
+}
+
+// applySplitOverrides forces the requested images into their split, rejecting
+// unknown image keys and values other than train/val. Keys are visited in
+// sorted order so the reported error is deterministic.
+func applySplitOverrides(out map[string]string, overrides map[string]string) error {
+	if len(overrides) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(overrides))
+	for k := range overrides {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	for _, k := range keys {
+		v := overrides[k]
+		if _, ok := out[k]; !ok {
+			return fmt.Errorf("exporter: 逐图划分指定的图片 %q 不在待导出图片中", k)
+		}
+		switch v {
+		case "train", "val":
+			out[k] = v
+		default:
+			return fmt.Errorf("exporter: 图片 %q 的逐图划分值必须为 train 或 val，得到 %q", k, v)
+		}
+	}
+	return nil
 }
 
 // splitHint strips one leading case-insensitive "images/" segment so split

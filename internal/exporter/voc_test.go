@@ -1,6 +1,7 @@
 package exporter
 
 import (
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"os"
@@ -290,7 +291,7 @@ func TestBuildVOCExportIntegration(t *testing.T) {
 		t.Fatalf("BuildPlan: %v", err)
 	}
 	out := filepath.Join(root, "out")
-	if err := WriteExport(out, imgRoot, plan, nil); err != nil {
+	if err := WriteExport(context.Background(), out, imgRoot, plan, nil); err != nil {
 		t.Fatalf("WriteExport: %v", err)
 	}
 
