@@ -1,5 +1,7 @@
 package app
 
+import "mylabel/locales"
+
 // Image navigation and view fitting (docs/phase5-design.md §1, §3).
 
 // goImage moves the thumbnail selection delta images along the list (A/D
@@ -17,11 +19,11 @@ func (a *App) goImage(delta int) bool {
 	}
 	target := a.selImg + delta
 	if target < 0 {
-		a.lastStatus = "已经是第一张"
+		a.lastStatus = locales.StatusFirstImage()
 		return false
 	}
 	if target >= len(a.images) {
-		a.lastStatus = "已经是最后一张"
+		a.lastStatus = locales.StatusLastImage()
 		return false
 	}
 	a.selImg = target

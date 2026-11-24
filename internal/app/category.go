@@ -8,6 +8,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"mylabel/locales"
 )
 
 // categoryPanelWidth is the fixed width of the category panel, in DIP
@@ -221,21 +223,21 @@ func (a *App) deleteCategory(idx int) {
 		return
 	}
 	if n := a.categoryRefs(idx); n > 0 {
-		msg := fmt.Sprintf("“%s”还有 %d 个标注在用，不能删除", a.categories[idx].Name, n)
+		msg := locales.CatPanelInUse(a.categories[idx].Name, n)
 		a.lastStatus = msg
 		if a.win != nil {
 			_, _ = mygo.Dialog.Message(mygo.MessageOptions{
 				Parent:  a.win,
 				Type:    mygo.MessageWarning,
-				Title:   "无法删除类别",
+				Title:   locales.CatPanelCannotDelete(),
 				Message: msg,
-				Buttons: []string{"知道了"},
+				Buttons: []string{locales.CommonGotIt()},
 			})
 		}
 		return
 	}
 	a.push(cmdDeleteCategory(a, idx))
-	a.lastStatus = "已删除类别"
+	a.lastStatus = locales.CatPanelDeleted()
 }
 
 // categoryPanel builds the right-hand category list (§6): a swatch and a name
@@ -245,13 +247,13 @@ func (a *App) categoryPanel(c *ui.Context) {
 	ui.Column(c).Width(categoryPanelWidth).FillHeight().Padding(6).Gap(4).
 		Background(t.Surface).Border(1, t.Border).Children(func() {
 		ui.Row(c).Gap(6).Children(func() {
-			ui.Text(c, "类别").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, locales.CatPanelTitle()).FontSize(11).TextColor(t.TextMuted)
 			ui.Textf(c, "%d", len(a.categories)).FontSize(11).TextColor(t.TextMuted)
 		})
 		ui.Scroll(c).Grow(1).Children(func() {
 			ui.Column(c).Gap(2).Children(func() {
 				if len(a.categories) == 0 {
-					ui.Text(c, "暂无类别，点“添加”新建").FontSize(11).TextColor(t.TextMuted)
+					ui.Text(c, locales.CatPanelEmpty()).FontSize(11).TextColor(t.TextMuted)
 				}
 				for i := range a.categories {
 					a.categoryRow(c, i)
@@ -259,8 +261,8 @@ func (a *App) categoryPanel(c *ui.Context) {
 			})
 		})
 		ui.Row(c).Gap(4).Children(func() {
-			ui.Button(c.Key("catAdd"), "添加").OnClick(a.addCategory)
-			ui.Button(c.Key("catDel"), "删除").OnClick(func() { a.deleteCategory(a.curCat) })
+			ui.Button(c.Key("catAdd"), locales.CommonAdd()).OnClick(a.addCategory)
+			ui.Button(c.Key("catDel"), locales.CommonDelete()).OnClick(func() { a.deleteCategory(a.curCat) })
 		})
 	})
 }
@@ -304,7 +306,7 @@ func (a *App) paletteModal(c *ui.Context) {
 			if idx >= 0 && idx < len(a.categories) {
 				name = a.categories[idx].Name
 			}
-			ui.Textf(c, "“%s”的颜色", name).FontSize(12)
+			ui.Text(c, locales.CatPanelColorTitle(name)).FontSize(12)
 			for start := 0; start < len(palettePresets); start += paletteColumns {
 				start := start
 				ui.Row(c).Gap(6).Children(func() {
@@ -325,7 +327,7 @@ func (a *App) paletteModal(c *ui.Context) {
 				})
 			}
 			ui.Row(c).Gap(6).Children(func() {
-				ui.Button(c.Key("paletteClose"), "关闭").OnClick(func() { a.paletteOpen = false })
+				ui.Button(c.Key("paletteClose"), locales.CommonClose()).OnClick(func() { a.paletteOpen = false })
 			})
 		})
 	})

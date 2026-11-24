@@ -1,0 +1,1607 @@
+{
+  "@@locale": "zh-Hans",
+  "commonAdd": "添加",
+  "@commonAdd": {
+    "description": "A button that adds a category."
+  },
+  "commonBack": "上一步",
+  "@commonBack": {
+    "description": "A wizard button that goes back one step."
+  },
+  "commonBrowse": "浏览…",
+  "@commonBrowse": {
+    "description": "A button that opens the platform's folder or file dialog."
+  },
+  "commonCancel": "取消",
+  "@commonCancel": {
+    "description": "A button that closes something without doing anything."
+  },
+  "commonClose": "关闭",
+  "@commonClose": {
+    "description": "A button that closes a dialog."
+  },
+  "commonDelete": "删除",
+  "@commonDelete": {
+    "description": "A button that deletes the selected category."
+  },
+  "commonDone": "完成",
+  "@commonDone": {
+    "description": "A button that closes a dialog and keeps what it changed."
+  },
+  "commonGotIt": "知道了",
+  "@commonGotIt": {
+    "description": "The single button of a message that only tells the user something."
+  },
+  "commonNext": "下一步",
+  "@commonNext": {
+    "description": "A wizard button that goes on to the next step."
+  },
+  "commonOK": "确定",
+  "@commonOK": {
+    "description": "A button that applies a dialog's edits and closes it."
+  },
+  "toolbarOpenFolder": "打开文件夹",
+  "@toolbarOpenFolder": {
+    "description": "The toolbar button that opens a folder of images."
+  },
+  "toolbarOpenFolderTitle": "选择图片文件夹",
+  "@toolbarOpenFolderTitle": {
+    "description": "The title of the platform dialog that picks the folder of images."
+  },
+  "toolbarSave": "保存 (Ctrl+S)",
+  "@toolbarSave": {
+    "description": "The toolbar button that saves the annotations."
+  },
+  "toolbarExportJSON": "导出 JSON",
+  "@toolbarExportJSON": {
+    "description": "The toolbar button that writes the legacy JSON document."
+  },
+  "toolbarImportAnnotations": "导入标注",
+  "@toolbarImportAnnotations": {
+    "description": "The toolbar button that opens the import wizard."
+  },
+  "toolbarExportDataset": "导出数据集",
+  "@toolbarExportDataset": {
+    "description": "The toolbar button that opens the export wizard."
+  },
+  "toolbarTools": "工具:",
+  "@toolbarTools": {
+    "description": "The label before the annotation tool buttons."
+  },
+  "toolbarToolRect": "矩形 (R)",
+  "@toolbarToolRect": {
+    "description": "The toolbar button of the rectangle tool."
+  },
+  "toolbarToolPoly": "多边形 (P)",
+  "@toolbarToolPoly": {
+    "description": "The toolbar button of the polygon tool."
+  },
+  "toolbarToolObb": "旋转框 (O)",
+  "@toolbarToolObb": {
+    "description": "The toolbar button of the rotated box tool."
+  },
+  "toolbarLabels": "标签 (L)",
+  "@toolbarLabels": {
+    "description": "The toolbar button that shows or hides the category chips on the canvas."
+  },
+  "toolbarShortcutHint": "数字键 1-9 改类别，双击标注改属性，Ctrl+D 标记完成，A/D 切换图片，Ctrl+B 沿用上一张",
+  "@toolbarShortcutHint": {
+    "description": "The toolbar's reminder of the keyboard shortcuts."
+  },
+  "toolbarLabelsShown": "已显示类别标签",
+  "@toolbarLabelsShown": {
+    "description": "The status bar, after the category chips were shown."
+  },
+  "toolbarLabelsHidden": "已隐藏类别标签",
+  "@toolbarLabelsHidden": {
+    "description": "The status bar, after the category chips were hidden."
+  },
+  "statusOpened": "{layout, select, widen {检测到 YOLO 数据集布局，已改为打开数据集根，} other {}}已打开 {dir}（{images, plural, other {# 张图片}}）{rotated, plural, =0 {} other {，已转正 # 张}}{migrated, plural, =0 {} other {，已迁移旧 JSON 标注 # 张}}{imported, plural, =0 {} other {，已导入 IR 项目 # 张图片}}{importedAnns, plural, =0 {} other { # 条标注}}{newCategories, plural, =0 {} other {（新建类别 # 个）}}{skippedAnns, plural, =0 {} other {，# 条标注无法转换已跳过}}",
+  "@statusOpened": {
+    "description": "The status bar, after a folder of images opened. The clauses whose count is zero are left out.",
+    "placeholders": {
+      "layout": {
+        "type": "String",
+        "example": "widen"
+      },
+      "dir": {
+        "type": "String",
+        "example": "C:/images"
+      },
+      "images": {
+        "type": "int",
+        "example": "12"
+      },
+      "rotated": {
+        "type": "int",
+        "example": "2"
+      },
+      "migrated": {
+        "type": "int",
+        "example": "0"
+      },
+      "imported": {
+        "type": "int",
+        "example": "0"
+      },
+      "importedAnns": {
+        "type": "int",
+        "example": "0"
+      },
+      "newCategories": {
+        "type": "int",
+        "example": "0"
+      },
+      "skippedAnns": {
+        "type": "int",
+        "example": "0"
+      }
+    }
+  },
+  "statusIRImportFailed": "{layout, select, widen {检测到 YOLO 数据集布局，已改为打开数据集根，} other {}}已打开 {dir}（{images, plural, other {# 张图片}}），IR 项目导入失败：{err}",
+  "@statusIRImportFailed": {
+    "description": "The status bar, when the folder opened but its IR project did not.",
+    "placeholders": {
+      "layout": {
+        "type": "String",
+        "example": "widen"
+      },
+      "dir": {
+        "type": "String",
+        "example": "C:/images"
+      },
+      "images": {
+        "type": "int",
+        "example": "12"
+      },
+      "err": {
+        "type": "String",
+        "example": "project.json: not found"
+      }
+    }
+  },
+  "statusLegacyMigrationFailed": "{layout, select, widen {检测到 YOLO 数据集布局，已改为打开数据集根，} other {}}已打开 {dir}（{images, plural, other {# 张图片}}），旧 JSON 未迁移：{err}",
+  "@statusLegacyMigrationFailed": {
+    "description": "The status bar, when the folder opened but its legacy JSON document could not be migrated.",
+    "placeholders": {
+      "layout": {
+        "type": "String",
+        "example": "widen"
+      },
+      "dir": {
+        "type": "String",
+        "example": "C:/images"
+      },
+      "images": {
+        "type": "int",
+        "example": "12"
+      },
+      "err": {
+        "type": "String",
+        "example": "unexpected end of JSON input"
+      }
+    }
+  },
+  "statusLegacyMigrationPartial": "{layout, select, widen {检测到 YOLO 数据集布局，已改为打开数据集根，} other {}}已打开 {dir}（{images, plural, other {# 张图片}}），已迁移旧 JSON 标注 {migrated, plural, other {# 张}}，部分旧 JSON 未迁移：{err}",
+  "@statusLegacyMigrationPartial": {
+    "description": "The status bar, when part of the legacy JSON document was migrated and then the migration failed.",
+    "placeholders": {
+      "layout": {
+        "type": "String",
+        "example": "widen"
+      },
+      "dir": {
+        "type": "String",
+        "example": "C:/images"
+      },
+      "images": {
+        "type": "int",
+        "example": "12"
+      },
+      "migrated": {
+        "type": "int",
+        "example": "3"
+      },
+      "err": {
+        "type": "String",
+        "example": "unexpected end of JSON input"
+      }
+    }
+  },
+  "statusScanFailed": "扫描失败: {err}",
+  "@statusScanFailed": {
+    "description": "The status bar, when the folder could not be scanned.",
+    "placeholders": {
+      "err": {
+        "type": "String",
+        "example": "access denied"
+      }
+    }
+  },
+  "statusOpenDBFailed": "打开数据库失败: {err}",
+  "@statusOpenDBFailed": {
+    "description": "The status bar, when the folder's working database could not be opened.",
+    "placeholders": {
+      "err": {
+        "type": "String",
+        "example": "file is locked"
+      }
+    }
+  },
+  "statusImagesUpsertFailed": "图片入库失败: {err}",
+  "@statusImagesUpsertFailed": {
+    "description": "The status bar, when the scanned images could not be stored.",
+    "placeholders": {
+      "err": {
+        "type": "String",
+        "example": "disk full"
+      }
+    }
+  },
+  "statusCleanupFailed": "清理失效记录失败: {err}",
+  "@statusCleanupFailed": {
+    "description": "The status bar, when the records of deleted images could not be removed.",
+    "placeholders": {
+      "err": {
+        "type": "String",
+        "example": "disk full"
+      }
+    }
+  },
+  "statusLoadDBFailed": "读取数据库失败: {err}",
+  "@statusLoadDBFailed": {
+    "description": "The status bar, when the stored images could not be read back.",
+    "placeholders": {
+      "err": {
+        "type": "String",
+        "example": "corrupt database"
+      }
+    }
+  },
+  "statusExportJSONFailed": "导出失败: {err}",
+  "@statusExportJSONFailed": {
+    "description": "The status bar, when the JSON document could not be written.",
+    "placeholders": {
+      "err": {
+        "type": "String",
+        "example": "access denied"
+      }
+    }
+  },
+  "statusExportedJSON": "已导出 {path}",
+  "@statusExportedJSON": {
+    "description": "The status bar, after the JSON document was written.",
+    "placeholders": {
+      "path": {
+        "type": "String",
+        "example": "C:/images/mylabel.annotations.json"
+      }
+    }
+  },
+  "statusImageOf": "图片 {index}/{total}",
+  "@statusImageOf": {
+    "description": "The status bar: which image of the folder is shown.",
+    "placeholders": {
+      "index": {
+        "type": "int",
+        "example": "3"
+      },
+      "total": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "statusAnnots": "标注 {count}",
+  "@statusAnnots": {
+    "description": "The status bar: how many annotations the image has.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "4"
+      }
+    }
+  },
+  "statusState": "状态: {state}",
+  "@statusState": {
+    "description": "The status bar: the image's status.",
+    "placeholders": {
+      "state": {
+        "type": "String",
+        "example": "已完成"
+      }
+    }
+  },
+  "statusSelectedCount": "选中 {count}",
+  "@statusSelectedCount": {
+    "description": "The status bar: how many annotations are selected.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "statusZoom": "缩放 {percent}%",
+  "@statusZoom": {
+    "description": "The status bar: the canvas's zoom factor.",
+    "placeholders": {
+      "percent": {
+        "type": "int",
+        "example": "100"
+      }
+    }
+  },
+  "statusMemory": "内存 {mb} MB",
+  "@statusMemory": {
+    "description": "The status bar: the memory the app uses, in megabytes.",
+    "placeholders": {
+      "mb": {
+        "type": "int",
+        "example": "128"
+      }
+    }
+  },
+  "statusUnsaved": "●未保存",
+  "@statusUnsaved": {
+    "description": "The status bar, while there are unsaved changes."
+  },
+  "statusSaveFailed": "保存失败: {err}",
+  "@statusSaveFailed": {
+    "description": "The status bar, when saving failed.",
+    "placeholders": {
+      "err": {
+        "type": "String",
+        "example": "disk full"
+      }
+    }
+  },
+  "statusSavedNothing": "已保存（无标注改动）",
+  "@statusSavedNothing": {
+    "description": "The status bar, after a save that had nothing to write."
+  },
+  "statusSavedImages": "已保存 {count} 张图片的标注",
+  "@statusSavedImages": {
+    "description": "The status bar, after saving the annotations of some images.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "statusWriteStatusFailed": "写入状态失败: {err}",
+  "@statusWriteStatusFailed": {
+    "description": "The status bar, when the image's status could not be stored.",
+    "placeholders": {
+      "err": {
+        "type": "String",
+        "example": "disk full"
+      }
+    }
+  },
+  "statusStateWritten": "状态: {state}",
+  "@statusStateWritten": {
+    "description": "The status bar, after the image's status was changed.",
+    "placeholders": {
+      "state": {
+        "type": "String",
+        "example": "已完成"
+      }
+    }
+  },
+  "statusImageReadFailed": "读取失败 {name}: {err}",
+  "@statusImageReadFailed": {
+    "description": "The status bar, when an image file could not be read.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "a.png"
+      },
+      "err": {
+        "type": "String",
+        "example": "access denied"
+      }
+    }
+  },
+  "statusImageDecodeFailed": "解码失败 {name}: {err}",
+  "@statusImageDecodeFailed": {
+    "description": "The status bar, when an image file could not be decoded.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "a.png"
+      },
+      "err": {
+        "type": "String",
+        "example": "unknown format"
+      }
+    }
+  },
+  "statusFirstImage": "已经是第一张",
+  "@statusFirstImage": {
+    "description": "The status bar, when there is no previous image."
+  },
+  "statusLastImage": "已经是最后一张",
+  "@statusLastImage": {
+    "description": "The status bar, when there is no next image."
+  },
+  "statusNoPreviousImage": "没有上一张图片",
+  "@statusNoPreviousImage": {
+    "description": "The status bar, when the labels of the previous image were asked for and there is none."
+  },
+  "statusNoPreviousAnns": "上一张没有标注可沿用",
+  "@statusNoPreviousAnns": {
+    "description": "The status bar, when the previous image has nothing to carry over."
+  },
+  "statusCarriedAnns": "已从上一张沿用 {count} 条标注",
+  "@statusCarriedAnns": {
+    "description": "The status bar, after the previous image's annotations were copied onto this one.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "statusDropUnsupported": "拖入的内容不是图片或文件夹",
+  "@statusDropUnsupported": {
+    "description": "The status bar, when something that is not an image or a folder was dropped on the window."
+  },
+  "statusNoCategories": "请先在右侧面板添加类别",
+  "@statusNoCategories": {
+    "description": "The status bar, when an annotation is about to be drawn in a workspace that has no category yet."
+  },
+  "statusObbTooSmall": "旋转框太小，已放弃",
+  "@statusObbTooSmall": {
+    "description": "The status bar, when a rotated box drag was too small to keep."
+  },
+  "statusNewImage": "新图",
+  "@statusNewImage": {
+    "description": "The name of the status of an image nothing was drawn on yet."
+  },
+  "statusLabeling": "标注中",
+  "@statusLabeling": {
+    "description": "The name of the status of an image being labeled."
+  },
+  "statusDone": "已完成",
+  "@statusDone": {
+    "description": "The name of the status of a labeled image."
+  },
+  "statusReviewed": "已复核",
+  "@statusReviewed": {
+    "description": "The name of the status of a reviewed image."
+  },
+  "statusSkipped": "已跳过",
+  "@statusSkipped": {
+    "description": "The name of the status of a skipped image."
+  },
+  "hintCanvasName": "标注画布",
+  "@hintCanvasName": {
+    "description": "The accessible name of the canvas."
+  },
+  "hintCanvasEmpty": "点击“打开文件夹”载入图片",
+  "@hintCanvasEmpty": {
+    "description": "The canvas, while no image is loaded."
+  },
+  "catPanelTitle": "类别",
+  "@catPanelTitle": {
+    "description": "The title of the category panel."
+  },
+  "catPanelEmpty": "暂无类别，点“添加”新建",
+  "@catPanelEmpty": {
+    "description": "The category panel, while there is no category."
+  },
+  "catPanelColorTitle": "“{name}”的颜色",
+  "@catPanelColorTitle": {
+    "description": "The title of the dialog that picks a category's color.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "person"
+      }
+    }
+  },
+  "catPanelDeleted": "已删除类别",
+  "@catPanelDeleted": {
+    "description": "The status bar, after a category was deleted."
+  },
+  "catPanelInUse": "“{name}”还有 {count} 个标注在用，不能删除",
+  "@catPanelInUse": {
+    "description": "The message shown when a category that annotations still name is about to be deleted.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "person"
+      },
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "catPanelCannotDelete": "无法删除类别",
+  "@catPanelCannotDelete": {
+    "description": "The title of the dialog that refuses to delete a category in use."
+  },
+  "catPanelUnnamed": "类别",
+  "@catPanelUnnamed": {
+    "description": "The name a category gets when the imported one has neither a name nor a key."
+  },
+  "propsTitle": "标注属性",
+  "@propsTitle": {
+    "description": "The title of the annotation's properties dialog."
+  },
+  "propsSubtitle": "{kind} · 第 {index} 条",
+  "@propsSubtitle": {
+    "description": "The properties dialog's subtitle: the shape and the annotation's place in the image.",
+    "placeholders": {
+      "kind": {
+        "type": "String",
+        "example": "矩形"
+      },
+      "index": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "propsKindPolygon": "多边形",
+  "@propsKindPolygon": {
+    "description": "The name of the polygon shape."
+  },
+  "propsKindObb": "旋转框",
+  "@propsKindObb": {
+    "description": "The name of the rotated box shape."
+  },
+  "propsKindRect": "矩形",
+  "@propsKindRect": {
+    "description": "The name of the rectangle shape."
+  },
+  "propsCategory": "类别",
+  "@propsCategory": {
+    "description": "The label of the category list in the properties dialog."
+  },
+  "propsCount": "属性（{count}）",
+  "@propsCount": {
+    "description": "The label of the attribute list in the properties dialog.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "propsKeyHint": "键为空的属性在确定时丢弃",
+  "@propsKeyHint": {
+    "description": "The hint next to the attribute list of the properties dialog."
+  },
+  "propsKeyField": "属性键{index}",
+  "@propsKeyField": {
+    "description": "The accessible name of one attribute's key field.",
+    "placeholders": {
+      "index": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "propsValueField": "属性值{index}",
+  "@propsValueField": {
+    "description": "The accessible name of one attribute's value field.",
+    "placeholders": {
+      "index": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "propsDeleteField": "删除属性{index}",
+  "@propsDeleteField": {
+    "description": "The accessible name of the button that deletes one attribute.",
+    "placeholders": {
+      "index": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "propsEmpty": "还没有属性",
+  "@propsEmpty": {
+    "description": "The properties dialog, while the annotation has no attribute."
+  },
+  "propsAdd": "添加属性",
+  "@propsAdd": {
+    "description": "The button that adds an attribute row to the properties dialog."
+  },
+  "propsChanged": "已更新标注属性（{count} 条属性）",
+  "@propsChanged": {
+    "description": "The status bar, after the properties dialog was applied.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "propsUnchanged": "属性未改动",
+  "@propsUnchanged": {
+    "description": "The status bar, after the properties dialog was applied without a change."
+  },
+  "menuZUp": "上移一层",
+  "@menuZUp": {
+    "description": "The z-order menu item that draws the annotation one layer later."
+  },
+  "menuZDown": "下移一层",
+  "@menuZDown": {
+    "description": "The z-order menu item that draws the annotation one layer earlier."
+  },
+  "menuZTop": "移到顶部",
+  "@menuZTop": {
+    "description": "The z-order menu item that draws the annotation last."
+  },
+  "menuZBottom": "移到底部",
+  "@menuZBottom": {
+    "description": "The z-order menu item that draws the annotation first."
+  },
+  "catPickTitle": "选择类别",
+  "@catPickTitle": {
+    "description": "The title of the dialog that changes one annotation's category."
+  },
+  "catPickSubtitle": "第 {index} 条 · 当前“{name}”",
+  "@catPickSubtitle": {
+    "description": "The dialog's subtitle: which annotation it changes and its category now.",
+    "placeholders": {
+      "index": {
+        "type": "int",
+        "example": "2"
+      },
+      "name": {
+        "type": "String",
+        "example": "person"
+      }
+    }
+  },
+  "catPickUncategorized": "未分类",
+  "@catPickUncategorized": {
+    "description": "The category shown when the annotation's category no longer exists."
+  },
+  "catPickChanged": "已改为类别 {name}",
+  "@catPickChanged": {
+    "description": "The status bar, after the annotation's category was changed.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "person"
+      }
+    }
+  },
+  "closeGuardTitle": "未保存的修改",
+  "@closeGuardTitle": {
+    "description": "The title of the dialog shown when the window is closed with unsaved annotations."
+  },
+  "closeGuardMessage": "标注尚未保存，退出前是否保存？",
+  "@closeGuardMessage": {
+    "description": "The message of the dialog shown when the window is closed with unsaved annotations."
+  },
+  "closeGuardSave": "保存并退出",
+  "@closeGuardSave": {
+    "description": "The close guard's button that saves the annotations and closes the window."
+  },
+  "closeGuardDiscard": "不保存退出",
+  "@closeGuardDiscard": {
+    "description": "The close guard's button that closes the window and drops the unsaved changes."
+  },
+  "wizardImportTitle": "导入标注",
+  "@wizardImportTitle": {
+    "description": "The title of the import wizard."
+  },
+  "wizardImportStepCounter": "第 {step}/4 步 · {name}",
+  "@wizardImportStepCounter": {
+    "description": "The import wizard's header: which step it is on.",
+    "placeholders": {
+      "step": {
+        "type": "int",
+        "example": "2"
+      },
+      "name": {
+        "type": "String",
+        "example": "路径"
+      }
+    }
+  },
+  "wizardImportStepFormat": "格式",
+  "@wizardImportStepFormat": {
+    "description": "Step 1 of the import wizard."
+  },
+  "wizardImportStepPath": "路径",
+  "@wizardImportStepPath": {
+    "description": "Step 2 of the import wizard."
+  },
+  "wizardImportStepMapping": "解析预览与类别映射",
+  "@wizardImportStepMapping": {
+    "description": "Step 3 of the import wizard."
+  },
+  "wizardImportStepReport": "错误与警告",
+  "@wizardImportStepReport": {
+    "description": "Step 4 of the import wizard."
+  },
+  "wizardImportFormatIR": "IR 项目",
+  "@wizardImportFormatIR": {
+    "description": "The import format of an IR project."
+  },
+  "wizardImportFormatUnknown": "未知",
+  "@wizardImportFormatUnknown": {
+    "description": "The name of an import format the wizard does not know."
+  },
+  "wizardImportPathHintYOLO": "选择 YOLO 数据集根目录（含 images/ 与 labels/）或 labels 目录；类别名取根目录的 data.yaml 或唯一 *.yaml",
+  "@wizardImportPathHintYOLO": {
+    "description": "Step 2 of the import wizard, while the format is YOLO."
+  },
+  "wizardImportPathHintCOCO": "选择 COCO 标注 JSON 文件",
+  "@wizardImportPathHintCOCO": {
+    "description": "Step 2 of the import wizard, while the format is COCO."
+  },
+  "wizardImportPathHintVOC": "选择 VOC XML 目录",
+  "@wizardImportPathHintVOC": {
+    "description": "Step 2 of the import wizard, while the format is VOC."
+  },
+  "wizardImportPathHintIR": "选择 IR 项目根目录（含 project.json）",
+  "@wizardImportPathHintIR": {
+    "description": "Step 2 of the import wizard, while the format is an IR project."
+  },
+  "wizardImportNeedPath": "请先选择路径",
+  "@wizardImportNeedPath": {
+    "description": "Shown when the path step is passed with an empty path."
+  },
+  "wizardImportNoImages": "在 {path} 下没有找到图片，请先打开图片文件夹或检查路径",
+  "@wizardImportNoImages": {
+    "description": "Shown when the folder the source implies holds no image.",
+    "placeholders": {
+      "path": {
+        "type": "String",
+        "example": "C:/dataset"
+      }
+    }
+  },
+  "wizardImportBrowseTitle": "选择{format} 标注来源",
+  "@wizardImportBrowseTitle": {
+    "description": "The title of the platform dialog that picks the import path.",
+    "placeholders": {
+      "format": {
+        "type": "String",
+        "example": "YOLO"
+      }
+    }
+  },
+  "wizardImportBrowseFilter": "标注文件",
+  "@wizardImportBrowseFilter": {
+    "description": "The name of the file filter of the platform dialog that picks a COCO JSON file."
+  },
+  "wizardImportHeadingFormat": "1. 选择来源格式",
+  "@wizardImportHeadingFormat": {
+    "description": "Step 1's heading."
+  },
+  "wizardImportFormatLabel": "导入格式",
+  "@wizardImportFormatLabel": {
+    "description": "The accessible name of the format radio group."
+  },
+  "wizardImportYoloTask": "YOLO 任务",
+  "@wizardImportYoloTask": {
+    "description": "The label of the YOLO task select."
+  },
+  "wizardImportYoloAmbiguity": "9 字段歧义（obb 还是 4 点 seg）由此裁决，auto 按首行字段数猜",
+  "@wizardImportYoloAmbiguity": {
+    "description": "The hint next to the YOLO task select."
+  },
+  "wizardImportVocOneBased": "bndbox 是 1-based（读取时减 1）",
+  "@wizardImportVocOneBased": {
+    "description": "The VOC switch: the XML's coordinates are 1-based."
+  },
+  "wizardImportVocOneBasedLabel": "VOC 1-based",
+  "@wizardImportVocOneBasedLabel": {
+    "description": "The accessible name of the VOC 1-based switch."
+  },
+  "wizardImportHeadingPath": "2. 选择路径",
+  "@wizardImportHeadingPath": {
+    "description": "Step 2's heading."
+  },
+  "wizardImportNoWorkspace": "未打开图片文件夹：将自动从数据集目录载入图片",
+  "@wizardImportNoWorkspace": {
+    "description": "Step 2, while no folder is open: the wizard loads one from the source it parses."
+  },
+  "wizardImportPathField": "导入路径",
+  "@wizardImportPathField": {
+    "description": "The accessible name of the import path field."
+  },
+  "wizardImportParseFailed": "解析失败：{err}",
+  "@wizardImportParseFailed": {
+    "description": "The path step, when parsing the source failed.",
+    "placeholders": {
+      "err": {
+        "type": "String",
+        "example": "unexpected end of JSON input"
+      }
+    }
+  },
+  "wizardImportNoParse": "没有解析结果",
+  "@wizardImportNoParse": {
+    "description": "The mapping step, when there is no parsed dataset."
+  },
+  "wizardImportPreview": "解析预览：{images, plural, other {# 张图片}} / {annots, plural, other {# 条标注}}；警告 {warnings, plural, other {# 条}}，可定位错误 {errors, plural, other {# 条}}",
+  "@wizardImportPreview": {
+    "description": "The mapping step's summary of what was parsed.",
+    "placeholders": {
+      "images": {
+        "type": "int",
+        "example": "3"
+      },
+      "annots": {
+        "type": "int",
+        "example": "5"
+      },
+      "warnings": {
+        "type": "int",
+        "example": "1"
+      },
+      "errors": {
+        "type": "int",
+        "example": "0"
+      }
+    }
+  },
+  "wizardImportMappingHint": "类别映射：每个源类别选一个现有类别，或新建",
+  "@wizardImportMappingHint": {
+    "description": "The hint above the category mapping rows."
+  },
+  "wizardImportMapField": "映射:{key}",
+  "@wizardImportMapField": {
+    "description": "The accessible name of one mapping row's select.",
+    "placeholders": {
+      "key": {
+        "type": "String",
+        "example": "cat1"
+      }
+    }
+  },
+  "wizardImportSource": "来源 \"{key}\"",
+  "@wizardImportSource": {
+    "description": "The source key shown next to a mapping row.",
+    "placeholders": {
+      "key": {
+        "type": "String",
+        "example": "cat1"
+      }
+    }
+  },
+  "wizardImportReportHeading": "错误与警告：错误 {errors, plural, other {# 条}}，警告 {warnings, plural, other {# 条}}；导入时错误条目会被跳过",
+  "@wizardImportReportHeading": {
+    "description": "The report step's summary.",
+    "placeholders": {
+      "errors": {
+        "type": "int",
+        "example": "1"
+      },
+      "warnings": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "wizardImportNoIssues": "没有错误或警告",
+  "@wizardImportNoIssues": {
+    "description": "The report step, when there is nothing to report."
+  },
+  "wizardImportKindError": "错误",
+  "@wizardImportKindError": {
+    "description": "Marks a report line as an error."
+  },
+  "wizardImportKindWarning": "警告",
+  "@wizardImportKindWarning": {
+    "description": "Marks a report line as a warning."
+  },
+  "wizardImportIssueLine": "[{kind}] {location}：{message}",
+  "@wizardImportIssueLine": {
+    "description": "One line of the report step: what was found and where.",
+    "placeholders": {
+      "kind": {
+        "type": "String",
+        "example": "错误"
+      },
+      "location": {
+        "type": "String",
+        "example": "a.png 第 3 条"
+      },
+      "message": {
+        "type": "String",
+        "example": "rings must have at least 3 points"
+      }
+    }
+  },
+  "wizardImportLocDataset": "数据集",
+  "@wizardImportLocDataset": {
+    "description": "The location of an issue that names no file."
+  },
+  "wizardImportLocIndex": "{location} 第 {index} 条",
+  "@wizardImportLocIndex": {
+    "description": "Adds the annotation's place to an issue's location.",
+    "placeholders": {
+      "location": {
+        "type": "String",
+        "example": "a.png"
+      },
+      "index": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "wizardImportLocField": "{location} {field}",
+  "@wizardImportLocField": {
+    "description": "Adds the field's name to an issue's location.",
+    "placeholders": {
+      "location": {
+        "type": "String",
+        "example": "a.png"
+      },
+      "field": {
+        "type": "String",
+        "example": "rings"
+      }
+    }
+  },
+  "wizardImportLocLine": "{file}:{line}",
+  "@wizardImportLocLine": {
+    "description": "Adds the line of the file to an issue's location.",
+    "placeholders": {
+      "file": {
+        "type": "String",
+        "example": "a.png"
+      },
+      "line": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "wizardImportApply": "导入正确部分",
+  "@wizardImportApply": {
+    "description": "The report step's button that writes what could be read."
+  },
+  "wizardImportStatus": "{summary}；{warning}{more, plural, =0 {} other {（另有 # 条警告）}}",
+  "@wizardImportStatus": {
+    "description": "The status bar, after an import that left warnings: its summary and the first warning.",
+    "placeholders": {
+      "summary": {
+        "type": "String",
+        "example": "已导入 2 张图片 3 条标注"
+      },
+      "warning": {
+        "type": "String",
+        "example": "a.png: 1 内部环已丢弃"
+      },
+      "more": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "wizardImportSummary": "已导入 {images, plural, other {# 张图片}} {annots, plural, other {# 条标注}}{newCategories, plural, =0 {} other {，新建类别 # 个}}{skippedImages, plural, =0 {} other {，跳过 # 张不匹配图片}}{skippedAnns, plural, =0 {} other {，跳过 # 条无法转换的标注}}{droppedRings, plural, =0 {} other {，丢弃内部环 # 个}}{attrs, plural, =0 {} other {，# 条带属性}}",
+  "@wizardImportSummary": {
+    "description": "The status bar's summary of an applied import. The clauses whose count is zero are left out.",
+    "placeholders": {
+      "images": {
+        "type": "int",
+        "example": "2"
+      },
+      "annots": {
+        "type": "int",
+        "example": "3"
+      },
+      "newCategories": {
+        "type": "int",
+        "example": "1"
+      },
+      "skippedImages": {
+        "type": "int",
+        "example": "0"
+      },
+      "skippedAnns": {
+        "type": "int",
+        "example": "1"
+      },
+      "droppedRings": {
+        "type": "int",
+        "example": "0"
+      },
+      "attrs": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "wizardImportWarnImageMissing": "未找到图片 {file}（其 {count} 条标注已跳过）",
+  "@wizardImportWarnImageMissing": {
+    "description": "An import warning: the dataset names an image the folder does not have.",
+    "placeholders": {
+      "file": {
+        "type": "String",
+        "example": "a.png"
+      },
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "wizardImportWarnRingsDropped": "{file}: {count} 个内部环超出单环模型，已丢弃",
+  "@wizardImportWarnRingsDropped": {
+    "description": "An import warning: a polygon had more rings than the app can hold.",
+    "placeholders": {
+      "file": {
+        "type": "String",
+        "example": "a.png"
+      },
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "wizardImportWarnNothing": "数据集里没有可导入的标注",
+  "@wizardImportWarnNothing": {
+    "description": "An import warning: nothing in the dataset could be imported."
+  },
+  "wizardImportOptionExisting": "{index}. {name}",
+  "@wizardImportOptionExisting": {
+    "description": "The mapping select's label for reusing an existing category. The leading number is the index the label is parsed back from.",
+    "placeholders": {
+      "index": {
+        "type": "int",
+        "example": "3"
+      },
+      "name": {
+        "type": "String",
+        "example": "person"
+      }
+    }
+  },
+  "wizardImportOptionNew": "＋ 新建“{name}”",
+  "@wizardImportOptionNew": {
+    "description": "The mapping select's label for creating a category.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "car"
+      }
+    }
+  },
+  "wizardExportTitle": "导出数据集",
+  "@wizardExportTitle": {
+    "description": "The title of the export wizard."
+  },
+  "wizardExportStepCounter": "第 {step}/4 步 · {name}",
+  "@wizardExportStepCounter": {
+    "description": "The export wizard's header: which step it is on.",
+    "placeholders": {
+      "step": {
+        "type": "int",
+        "example": "3"
+      },
+      "name": {
+        "type": "String",
+        "example": "试运行报告"
+      }
+    }
+  },
+  "wizardExportStepFormat": "格式",
+  "@wizardExportStepFormat": {
+    "description": "Step 1 of the export wizard."
+  },
+  "wizardExportStepSplit": "划分",
+  "@wizardExportStepSplit": {
+    "description": "Step 2 of the export wizard."
+  },
+  "wizardExportStepReport": "试运行报告",
+  "@wizardExportStepReport": {
+    "description": "Step 3 of the export wizard."
+  },
+  "wizardExportStepOutput": "输出目录",
+  "@wizardExportStepOutput": {
+    "description": "Step 4 of the export wizard."
+  },
+  "wizardExportCounts": "{images, plural, other {# 张图片}} / {annots, plural, other {# 条标注}}",
+  "@wizardExportCounts": {
+    "description": "The export wizard's header: what the workspace holds.",
+    "placeholders": {
+      "images": {
+        "type": "int",
+        "example": "12"
+      },
+      "annots": {
+        "type": "int",
+        "example": "30"
+      }
+    }
+  },
+  "wizardExportTaskDet": "det 检测框",
+  "@wizardExportTaskDet": {
+    "description": "The YOLO task of detection boxes."
+  },
+  "wizardExportTaskSeg": "seg 分割",
+  "@wizardExportTaskSeg": {
+    "description": "The YOLO task of polygons."
+  },
+  "wizardExportTaskObb": "obb 旋转框",
+  "@wizardExportTaskObb": {
+    "description": "The YOLO task of rotated boxes."
+  },
+  "wizardExportNoWorkspace": "请先打开图片文件夹再导出数据集",
+  "@wizardExportNoWorkspace": {
+    "description": "The status bar, when the export wizard was asked for without an open folder."
+  },
+  "wizardExportBadSeed": "随机种子必须是整数：\"{seed}\"",
+  "@wizardExportBadSeed": {
+    "description": "Shown on the split step when the seed is not a number.",
+    "placeholders": {
+      "seed": {
+        "type": "String",
+        "example": "abc"
+      }
+    }
+  },
+  "wizardExportNeedTarget": "请选择输出位置并填写目录名",
+  "@wizardExportNeedTarget": {
+    "description": "Shown when the output folder is not chosen yet."
+  },
+  "wizardExportTargetExists": "目录已存在，导出不会覆盖：{path}",
+  "@wizardExportTargetExists": {
+    "description": "Shown when the folder the export would create is already there.",
+    "placeholders": {
+      "path": {
+        "type": "String",
+        "example": "C:/mylabel-export"
+      }
+    }
+  },
+  "wizardExportTargetCheckFailed": "无法检查目标目录：{err}",
+  "@wizardExportTargetCheckFailed": {
+    "description": "Shown when the output folder could not be inspected.",
+    "placeholders": {
+      "err": {
+        "type": "String",
+        "example": "access denied"
+      }
+    }
+  },
+  "wizardExportParentMissing": "上级目录不存在：{path}",
+  "@wizardExportParentMissing": {
+    "description": "Shown when the parent of the output folder does not exist.",
+    "placeholders": {
+      "path": {
+        "type": "String",
+        "example": "C:/nowhere"
+      }
+    }
+  },
+  "wizardExportNeedName": "请填写目录名",
+  "@wizardExportNeedName": {
+    "description": "Shown when the output folder's name is empty."
+  },
+  "wizardExportBadName": "目录名不能是 \"{name}\"",
+  "@wizardExportBadName": {
+    "description": "Shown when the output folder's name is \".\" or \"..\".",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": ".."
+      }
+    }
+  },
+  "wizardExportBadNameSeparator": "目录名不能包含路径分隔符",
+  "@wizardExportBadNameSeparator": {
+    "description": "Shown when the output folder's name holds a slash or a colon."
+  },
+  "wizardExportCanceled": "已取消导出（未写出任何文件）",
+  "@wizardExportCanceled": {
+    "description": "The output step, after the user canceled the export."
+  },
+  "wizardExportRunFailed": "导出失败：{err}",
+  "@wizardExportRunFailed": {
+    "description": "The output step, when writing the export failed.",
+    "placeholders": {
+      "err": {
+        "type": "String",
+        "example": "access denied"
+      }
+    }
+  },
+  "wizardExportDone": "已导出数据集到 {path}",
+  "@wizardExportDone": {
+    "description": "The status bar and the toast, after the export landed.",
+    "placeholders": {
+      "path": {
+        "type": "String",
+        "example": "C:/mylabel-export"
+      }
+    }
+  },
+  "wizardExportCanceling": "正在取消导出…",
+  "@wizardExportCanceling": {
+    "description": "The status bar, while the export is being canceled."
+  },
+  "wizardExportBrowseTitle": "选择导出位置",
+  "@wizardExportBrowseTitle": {
+    "description": "The title of the platform dialog that picks the export's parent folder."
+  },
+  "wizardExportHeadingFormat": "1. 选择目标格式",
+  "@wizardExportHeadingFormat": {
+    "description": "Step 1's heading."
+  },
+  "wizardExportFormatLabel": "导出格式",
+  "@wizardExportFormatLabel": {
+    "description": "The accessible name of the format radio group."
+  },
+  "wizardExportYoloTaskHint": "YOLO 任务（默认按当前标注内容推断）",
+  "@wizardExportYoloTaskHint": {
+    "description": "The hint above the YOLO task radios."
+  },
+  "wizardExportYoloTaskLabel": "YOLO 任务",
+  "@wizardExportYoloTaskLabel": {
+    "description": "The accessible name of the YOLO task radio group."
+  },
+  "wizardExportVocOneBased": "bndbox 写 1-based 坐标（VOC 官方惯例）",
+  "@wizardExportVocOneBased": {
+    "description": "The VOC switch: write 1-based coordinates."
+  },
+  "wizardExportVocOneBasedLabel": "VOC 1-based",
+  "@wizardExportVocOneBasedLabel": {
+    "description": "The accessible name of the VOC 1-based switch."
+  },
+  "wizardExportVocSeg": "导出分割 PNG 掩码（SegmentationClass/Object）",
+  "@wizardExportVocSeg": {
+    "description": "The VOC switch: write polygon masks as PNG."
+  },
+  "wizardExportVocSegLabel": "VOC seg 掩码",
+  "@wizardExportVocSegLabel": {
+    "description": "The accessible name of the VOC segmentation switch."
+  },
+  "wizardExportVocDowngrade": "旋转框降级为外接 bndbox（有损，丢方向）",
+  "@wizardExportVocDowngrade": {
+    "description": "The VOC switch: downgrade rotated boxes."
+  },
+  "wizardExportVocDowngradeLabel": "VOC 降级 OBB",
+  "@wizardExportVocDowngradeLabel": {
+    "description": "The accessible name of the VOC downgrade switch."
+  },
+  "wizardExportCocoObbNote": "COCO 导出旋转框会写非标准扩展字段 mylabel_obb，报告里会列出条数",
+  "@wizardExportCocoObbNote": {
+    "description": "The note under the COCO format's options."
+  },
+  "wizardExportHeadingSplit": "2. 训练/验证划分",
+  "@wizardExportHeadingSplit": {
+    "description": "Step 2's heading."
+  },
+  "wizardExportSplitPreserve": "保留源目录的 train/val，其余归 train",
+  "@wizardExportSplitPreserve": {
+    "description": "The split policy that keeps the source layout."
+  },
+  "wizardExportSplitRandom": "按比例随机划分（同种子可复现）",
+  "@wizardExportSplitRandom": {
+    "description": "The split policy that shuffles."
+  },
+  "wizardExportSplitLabel": "划分方式",
+  "@wizardExportSplitLabel": {
+    "description": "The accessible name of the split policy radio group."
+  },
+  "wizardExportRatio": "训练集比例",
+  "@wizardExportRatio": {
+    "description": "The label of the random split's ratio."
+  },
+  "wizardExportRatioField": "训练集比例",
+  "@wizardExportRatioField": {
+    "description": "The accessible name of the random split's ratio."
+  },
+  "wizardExportSeedLabel": "种子",
+  "@wizardExportSeedLabel": {
+    "description": "The label before the random split's seed field."
+  },
+  "wizardExportSeedField": "随机种子",
+  "@wizardExportSeedField": {
+    "description": "The accessible name of the random split's seed field."
+  },
+  "wizardExportSeedHint": "同比例同种子每次划分结果一致",
+  "@wizardExportSeedHint": {
+    "description": "The hint next to the random split's controls."
+  },
+  "wizardExportInvalid": "设置无效：{err}",
+  "@wizardExportInvalid": {
+    "description": "The split step, when its settings were rejected.",
+    "placeholders": {
+      "err": {
+        "type": "String",
+        "example": "随机种子必须是整数：\"abc\""
+      }
+    }
+  },
+  "wizardExportCantExport": "无法导出",
+  "@wizardExportCantExport": {
+    "description": "The report step's heading when the plan failed."
+  },
+  "wizardExportReport": "试运行报告：{images, plural, other {# 张图片}}（{withAnns, plural, other {# 张有标注}}）/ {annots, plural, other {# 条标注}}，丢弃 {dropped, plural, other {# 条}}",
+  "@wizardExportReport": {
+    "description": "The report step's first line: what the export would write.",
+    "placeholders": {
+      "images": {
+        "type": "int",
+        "example": "12"
+      },
+      "withAnns": {
+        "type": "int",
+        "example": "10"
+      },
+      "annots": {
+        "type": "int",
+        "example": "30"
+      },
+      "dropped": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "wizardExportSplitCounts": "划分：train {train} 张，val {val} 张；类别 {categories} 个（{names}）",
+  "@wizardExportSplitCounts": {
+    "description": "The report step's split line.",
+    "placeholders": {
+      "train": {
+        "type": "int",
+        "example": "10"
+      },
+      "val": {
+        "type": "int",
+        "example": "2"
+      },
+      "categories": {
+        "type": "int",
+        "example": "3"
+      },
+      "names": {
+        "type": "String",
+        "example": "person、car、dog"
+      }
+    }
+  },
+  "wizardExportAdjust": "逐图调整…",
+  "@wizardExportAdjust": {
+    "description": "The report step's button that opens the per-image split dialog."
+  },
+  "wizardExportAdjustHint": "逐图改划分不碰源文件，只影响导出",
+  "@wizardExportAdjustHint": {
+    "description": "The hint next to the per-image button."
+  },
+  "wizardExportDirtyNote": "当前有未保存的修改：导出按屏幕上的内容进行，不要求先保存",
+  "@wizardExportDirtyNote": {
+    "description": "The report step, while the session holds unsaved changes."
+  },
+  "wizardExportNoLossy": "没有有损转换或警告",
+  "@wizardExportNoLossy": {
+    "description": "The report step, when it has nothing to list."
+  },
+  "wizardExportLossyRule": "{rule} ×{count}",
+  "@wizardExportLossyRule": {
+    "description": "One lossy rule of the report: its name and how many times it fired.",
+    "placeholders": {
+      "rule": {
+        "type": "String",
+        "example": "obb_downgraded"
+      },
+      "count": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "wizardExportSampleFile": "示例：{file}",
+  "@wizardExportSampleFile": {
+    "description": "A lossy rule's example file.",
+    "placeholders": {
+      "file": {
+        "type": "String",
+        "example": "a.png"
+      }
+    }
+  },
+  "wizardExportSampleAnn": "示例：{file} 标注 {id}",
+  "@wizardExportSampleAnn": {
+    "description": "A lossy rule's example file and annotation.",
+    "placeholders": {
+      "file": {
+        "type": "String",
+        "example": "a.png"
+      },
+      "id": {
+        "type": "String",
+        "example": "a1"
+      }
+    }
+  },
+  "wizardExportSampleMessage": "示例：{file} — {message}",
+  "@wizardExportSampleMessage": {
+    "description": "A lossy rule's example file and what the rule did.",
+    "placeholders": {
+      "file": {
+        "type": "String",
+        "example": "a.png"
+      },
+      "message": {
+        "type": "String",
+        "example": "outside the image, clipped"
+      }
+    }
+  },
+  "wizardExportSampleAnnMessage": "示例：{file} 标注 {id} — {message}",
+  "@wizardExportSampleAnnMessage": {
+    "description": "A lossy rule's example file, annotation and what the rule did.",
+    "placeholders": {
+      "file": {
+        "type": "String",
+        "example": "a.png"
+      },
+      "id": {
+        "type": "String",
+        "example": "a1"
+      },
+      "message": {
+        "type": "String",
+        "example": "outside the image, clipped"
+      }
+    }
+  },
+  "wizardExportWarning": "警告：{text}",
+  "@wizardExportWarning": {
+    "description": "One warning of the report step.",
+    "placeholders": {
+      "text": {
+        "type": "String",
+        "example": "VOC 的 bndbox 超出图片"
+      }
+    }
+  },
+  "wizardExportNoCategories": "当前工作区没有类别：所有标注都会被丢弃",
+  "@wizardExportNoCategories": {
+    "description": "The report step, when the workspace has no category."
+  },
+  "wizardExportAdjustTitle": "逐图调整划分",
+  "@wizardExportAdjustTitle": {
+    "description": "The title of the per-image split dialog."
+  },
+  "wizardExportAdjustCounts": "train {train} 张 / val {val} 张",
+  "@wizardExportAdjustCounts": {
+    "description": "The per-image dialog's header: how the split stands now.",
+    "placeholders": {
+      "train": {
+        "type": "int",
+        "example": "10"
+      },
+      "val": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "wizardExportAdjustNote": "点击一行在 train 与 val 之间切换；改回自动划分的结果即恢复原样",
+  "@wizardExportAdjustNote": {
+    "description": "The hint at the top of the per-image split dialog."
+  },
+  "wizardExportAdjustFilter": "按文件名筛选",
+  "@wizardExportAdjustFilter": {
+    "description": "The accessible name of the per-image dialog's filter field."
+  },
+  "wizardExportAdjustTotal": "{count} 张",
+  "@wizardExportAdjustTotal": {
+    "description": "How many images the per-image dialog lists.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "wizardExportAdjustNoMatch": "没有匹配的图片",
+  "@wizardExportAdjustNoMatch": {
+    "description": "The per-image dialog, when the filter matches nothing."
+  },
+  "wizardExportAdjustReset": "全部重置",
+  "@wizardExportAdjustReset": {
+    "description": "The per-image dialog's button that drops every change."
+  },
+  "wizardExportHeadingOutput": "4. 选择输出位置（导出会在这里新建一个目录，已存在的目录不会被覆盖）",
+  "@wizardExportHeadingOutput": {
+    "description": "Step 4's heading."
+  },
+  "wizardExportParentLabel": "导出位置",
+  "@wizardExportParentLabel": {
+    "description": "The accessible name of the output parent field."
+  },
+  "wizardExportDirNameLabel": "目录名",
+  "@wizardExportDirNameLabel": {
+    "description": "The label before the new folder's name field."
+  },
+  "wizardExportDirNameField": "导出目录名",
+  "@wizardExportDirNameField": {
+    "description": "The accessible name of the new folder's name field."
+  },
+  "wizardExportWillWrite": "将写入：{path}",
+  "@wizardExportWillWrite": {
+    "description": "Step 4: the folder the export would create.",
+    "placeholders": {
+      "path": {
+        "type": "String",
+        "example": "C:/mylabel-export"
+      }
+    }
+  },
+  "wizardExportDonePath": "导出完成：{path}",
+  "@wizardExportDonePath": {
+    "description": "The output step, after the export landed.",
+    "placeholders": {
+      "path": {
+        "type": "String",
+        "example": "C:/mylabel-export"
+      }
+    }
+  },
+  "wizardExportProgressLabel": "导出进度",
+  "@wizardExportProgressLabel": {
+    "description": "The accessible name of the progress bar."
+  },
+  "wizardExportWriting": "正在写入 {done}/{total}",
+  "@wizardExportWriting": {
+    "description": "The output step's progress line.",
+    "placeholders": {
+      "done": {
+        "type": "int",
+        "example": "3"
+      },
+      "total": {
+        "type": "int",
+        "example": "10"
+      }
+    }
+  },
+  "wizardExportCancel": "取消导出",
+  "@wizardExportCancel": {
+    "description": "The output step's button that stops the export."
+  },
+  "wizardExportStart": "开始导出",
+  "@wizardExportStart": {
+    "description": "The output step's button that starts the export."
+  },
+  "toastExportCanceled": "导出已取消",
+  "@toastExportCanceled": {
+    "description": "The toast shown after the export was canceled."
+  },
+  "errorNoFolder": "未打开文件夹",
+  "@errorNoFolder": {
+    "description": "The error reported when an action needs an open folder."
+  },
+  "errorParseDoc": "{name}: 解析失败: {err}",
+  "@errorParseDoc": {
+    "description": "The error reported when the legacy JSON document could not be read.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "mylabel.annotations.json"
+      },
+      "err": {
+        "type": "String",
+        "example": "unexpected end of JSON input"
+      }
+    }
+  },
+  "errorUnknownImportFormat": "未知的导入格式",
+  "@errorUnknownImportFormat": {
+    "description": "The error reported when the import wizard's format has no parser."
+  }
+}

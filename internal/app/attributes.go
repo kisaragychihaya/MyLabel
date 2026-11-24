@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"mylabel/locales"
 )
 
 // The annotation properties dialog (docs/phase3-design.md §5.1): a double-click
@@ -149,22 +151,22 @@ func (a *App) commitProps() {
 	a.closeProps()
 
 	if sameAnn(before, after) {
-		a.lastStatus = "属性未改动"
+		a.lastStatus = locales.PropsUnchanged()
 		return
 	}
 	a.push(cmdModify(a, a.loaded, idx, before, after))
-	a.lastStatus = fmt.Sprintf("已更新标注属性（%d 条属性）", len(after.Attributes))
+	a.lastStatus = locales.PropsChanged(len(after.Attributes))
 }
 
 // propsKindLabel names the annotation's shape for the dialog's subtitle.
 func propsKindLabel(an *Ann) string {
 	if isPoly(an) {
-		return "多边形"
+		return locales.PropsKindPolygon()
 	}
 	if an.Angle != 0 {
-		return "旋转框"
+		return locales.PropsKindObb()
 	}
-	return "矩形"
+	return locales.PropsKindRect()
 }
 
 // propsModal draws the properties dialog. It is a no-op while the dialog is
@@ -187,11 +189,11 @@ func (a *App) propsModal(c *ui.Context) {
 	ui.Modal(c, &m.Open, func() {
 		ui.Column(c).Width(propsWidth).Gap(8).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "标注属性").FontSize(14).Bold()
-				ui.Textf(c, "%s · 第 %d 条", title, m.Index+1).FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, locales.PropsTitle()).FontSize(14).Bold()
+				ui.Text(c, locales.PropsSubtitle(title, m.Index+1)).FontSize(11).TextColor(t.TextMuted)
 			})
 
-			ui.Text(c, "类别").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, locales.PropsCategory()).FontSize(11).TextColor(t.TextMuted)
 			ui.Scroll(c).Height(110).Children(func() {
 				ui.Column(c).Gap(2).Children(func() {
 					for i := range a.categories {
@@ -201,8 +203,8 @@ func (a *App) propsModal(c *ui.Context) {
 			})
 
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Textf(c, "属性（%d）", len(m.Rows)).FontSize(11).TextColor(t.TextMuted)
-				ui.Text(c, "键为空的属性在确定时丢弃").FontSize(10).TextColor(t.TextMuted)
+				ui.Text(c, locales.PropsCount(len(m.Rows))).FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, locales.PropsKeyHint()).FontSize(10).TextColor(t.TextMuted)
 			})
 			ui.Scroll(c).Height(160).Children(func() {
 				ui.Column(c).Gap(4).Children(func() {
@@ -212,11 +214,11 @@ func (a *App) propsModal(c *ui.Context) {
 						n := i + 1
 						ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
 							ui.TextInput(c.Key(fmt.Sprintf("propKey%d", row.ID)), &row.Key).
-								Width(130).Label(fmt.Sprintf("属性键%d", n))
+								Width(130).Label(locales.PropsKeyField(n))
 							ui.TextInput(c.Key(fmt.Sprintf("propVal%d", row.ID)), &row.Value).
-								Grow(1).Label(fmt.Sprintf("属性值%d", n))
+								Grow(1).Label(locales.PropsValueField(n))
 							if ui.Button(c.Key(fmt.Sprintf("propDel%d", row.ID)), "×").
-								Label(fmt.Sprintf("删除属性%d", n)).Clicked() {
+								Label(locales.PropsDeleteField(n)).Clicked() {
 								del = i
 							}
 						})
@@ -227,18 +229,18 @@ func (a *App) propsModal(c *ui.Context) {
 						m.Rows = append(m.Rows[:del:del], m.Rows[del+1:]...)
 					}
 					if len(m.Rows) == 0 {
-						ui.Text(c, "还没有属性").FontSize(11).TextColor(t.TextMuted)
+						ui.Text(c, locales.PropsEmpty()).FontSize(11).TextColor(t.TextMuted)
 					}
 				})
 			})
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.Button(c.Key("propAdd"), "添加属性").OnClick(a.addPropRow)
+				ui.Button(c.Key("propAdd"), locales.PropsAdd()).OnClick(a.addPropRow)
 			})
 			ui.Row(c).Gap(8).Children(func() {
-				if ui.PrimaryButton(c.Key("propOk"), "确定").Clicked() {
+				if ui.PrimaryButton(c.Key("propOk"), locales.CommonOK()).Clicked() {
 					a.commitProps()
 				}
-				if ui.Button(c.Key("propCancel"), "取消").Clicked() {
+				if ui.Button(c.Key("propCancel"), locales.CommonCancel()).Clicked() {
 					a.closeProps()
 				}
 			})

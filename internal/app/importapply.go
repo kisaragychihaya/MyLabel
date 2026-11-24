@@ -7,6 +7,7 @@ import (
 
 	"mylabel/internal/importer"
 	"mylabel/internal/ir"
+	"mylabel/locales"
 )
 
 // The import pipeline (docs/phase3-design.md §4.2 step 5): a parsed Dataset
@@ -35,33 +36,19 @@ type importResult struct {
 	Warnings      []string // human-readable notes, capped at maxImportWarnings
 }
 
-// String renders the summary for the status bar.
+// String renders the summary for the status bar. The counts that did something
+// are mentioned only when non-zero.
 func (r importResult) String() string {
-	parts := []string{fmt.Sprintf("已导入 %d 张图片 %d 条标注", r.Images, r.Annots)}
-	if r.NewCategories > 0 {
-		parts = append(parts, fmt.Sprintf("新建类别 %d 个", r.NewCategories))
-	}
-	if r.SkippedImages > 0 {
-		parts = append(parts, fmt.Sprintf("跳过 %d 张不匹配图片", r.SkippedImages))
-	}
-	if r.SkippedAnns > 0 {
-		parts = append(parts, fmt.Sprintf("跳过 %d 条无法转换的标注", r.SkippedAnns))
-	}
-	if r.DroppedRings > 0 {
-		parts = append(parts, fmt.Sprintf("丢弃内部环 %d 个", r.DroppedRings))
-	}
-	if r.Attrs > 0 {
-		parts = append(parts, fmt.Sprintf("%d 条带属性", r.Attrs))
-	}
-	return strings.Join(parts, "，")
+	return locales.WizardImportSummary(r.Images, r.Annots, r.NewCategories,
+		r.SkippedImages, r.SkippedAnns, r.DroppedRings, r.Attrs)
 }
 
 // addWarning appends one warning, keeping the list bounded.
-func (r *importResult) addWarning(format string, args ...any) {
+func (r *importResult) addWarning(msg string) {
 	if len(r.Warnings) >= maxImportWarnings {
 		return
 	}
-	r.Warnings = append(r.Warnings, fmt.Sprintf(format, args...))
+	r.Warnings = append(r.Warnings, msg)
 }
 
 // datasetCategories returns the dataset's category table without duplicates, in
@@ -99,12 +86,12 @@ func (a *App) categoryIndexByName(name string) int {
 
 // existingOption is the mapping select's label for "reuse category i".
 func (a *App) existingOption(i int) string {
-	return fmt.Sprintf("%d. %s", i+1, a.categories[i].Name)
+	return locales.WizardImportOptionExisting(i+1, a.categories[i].Name)
 }
 
 // newCatOption is the mapping select's label for "create a category called
 // name".
-func newCatOption(name string) string { return "＋ 新建“" + name + "”" }
+func newCatOption(name string) string { return locales.WizardImportOptionNew(name) }
 
 // parseExistingOption reads the index back out of an existingOption label
 // ("3. car" → 2).
@@ -233,7 +220,7 @@ func (a *App) applyImport(ds *importer.Dataset, catOf map[string]int) importResu
 		idx, ok := byRel[rel]
 		if !ok {
 			res.SkippedImages++
-			res.addWarning("未找到图片 %s（其 %d 条标注已跳过）", rel, len(src.Annotations))
+			res.addWarning(locales.WizardImportWarnImageMissing(rel, len(src.Annotations)))
 			continue
 		}
 		if len(src.Annotations) == 0 {
@@ -253,7 +240,7 @@ func (a *App) applyImport(ds *importer.Dataset, catOf map[string]int) importResu
 		res.Attrs += stats.attrs
 		res.DroppedRings += stats.droppedRings
 		if stats.droppedRings > 0 {
-			res.addWarning("%s: %d 个内部环超出单环模型，已丢弃", rel, stats.droppedRings)
+			res.addWarning(locales.WizardImportWarnRingsDropped(rel, stats.droppedRings))
 		}
 		if len(anns) == 0 {
 			continue
@@ -281,7 +268,7 @@ func (a *App) applyImport(ds *importer.Dataset, catOf map[string]int) importResu
 
 	if len(adds) == 0 {
 		if res.SkippedImages == 0 {
-			res.addWarning("数据集里没有可导入的标注")
+			res.addWarning(locales.WizardImportWarnNothing())
 		}
 		return res
 	}

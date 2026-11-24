@@ -1,7 +1,7 @@
 package app
 
 import (
-	"fmt"
+	"math"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -12,6 +12,7 @@ import (
 
 	"mylabel/internal/imaging"
 	"mylabel/internal/store"
+	"mylabel/locales"
 )
 
 // App is the whole application state. The view is rebuilt from it every
@@ -328,13 +329,13 @@ func (a *App) openDir(dir string) {
 
 	scanned, err := imaging.Scan(dir)
 	if err != nil {
-		a.lastStatus = "扫描失败: " + err.Error()
+		a.lastStatus = locales.StatusScanFailed(err.Error())
 		return
 	}
 
 	st, err := store.Open(filepath.Join(dir, dbName))
 	if err != nil {
-		a.lastStatus = "打开数据库失败: " + err.Error()
+		a.lastStatus = locales.StatusOpenDBFailed(err.Error())
 		return
 	}
 
@@ -358,19 +359,19 @@ func (a *App) openDir(dir string) {
 	// a failure leaves the previously opened folder on screen.
 	if err := st.UpsertImages(recs); err != nil {
 		_ = st.Close()
-		a.lastStatus = "图片入库失败: " + err.Error()
+		a.lastStatus = locales.StatusImagesUpsertFailed(err.Error())
 		return
 	}
 	if _, err := st.DeleteMissingImages(keep); err != nil {
 		_ = st.Close()
-		a.lastStatus = "清理失效记录失败: " + err.Error()
+		a.lastStatus = locales.StatusCleanupFailed(err.Error())
 		return
 	}
 
 	loaded, err := st.LoadImages()
 	if err != nil {
 		_ = st.Close()
-		a.lastStatus = "读取数据库失败: " + err.Error()
+		a.lastStatus = locales.StatusLoadDBFailed(err.Error())
 		return
 	}
 	// A legacy document and an IR project are both one-time imports into an
@@ -384,7 +385,7 @@ func (a *App) openDir(dir string) {
 		if migrated > 0 {
 			if loaded, err = st.LoadImages(); err != nil {
 				_ = st.Close()
-				a.lastStatus = "读取数据库失败: " + err.Error()
+				a.lastStatus = locales.StatusLoadDBFailed(err.Error())
 				return
 			}
 		}
@@ -451,43 +452,66 @@ func (a *App) openDir(dir string) {
 		a.loaded = 0
 	}
 
-	status := openDirStatus(dir, len(a.images), rotated, migrated)
-	if irRes.Images > 0 {
-		status += fmt.Sprintf("，已导入 IR 项目 %d 张图片 %d 条标注", irRes.Images, irRes.Annots)
-		if irRes.NewCategories > 0 {
-			status += fmt.Sprintf("（新建类别 %d 个）", irRes.NewCategories)
-		}
-		if irRes.SkippedAnns > 0 {
-			status += fmt.Sprintf("，%d 条标注无法转换已跳过", irRes.SkippedAnns)
-		}
-	}
-	if irErr != nil {
-		status += "，IR 项目导入失败: " + irErr.Error()
-	}
-	if migrateErr != nil {
-		if migrated > 0 {
-			status += "，部分旧 JSON 未迁移: " + migrateErr.Error()
-		} else {
-			status += "，旧 JSON 未迁移: " + migrateErr.Error()
-		}
-	}
-	a.lastStatus = status
-	if widened {
-		a.lastStatus = yoloRootNote + a.lastStatus
-	}
+	a.lastStatus = openDirStatusLine(dir, len(a.images), openDirNotes{
+		widened:      widened,
+		rotated:      rotated,
+		migrated:     migrated,
+		importResult: irRes,
+		importErr:    irErr,
+		migrationErr: migrateErr,
+	})
 }
 
-// openDirStatus builds the status bar line of a freshly opened folder. The
-// counts that did something are mentioned only when non-zero.
+// openDirNotes collects what opening a folder changed, for the status line.
+type openDirNotes struct {
+	// widened says the folder resolved to an Ultralytics dataset root.
+	widened bool
+	// rotated counts the JPEGs physically straightened on this scan.
+	rotated int
+	// migrated counts the images imported from the legacy JSON document.
+	migrated int
+	// importResult is what the IR project import brought in, if any.
+	importResult importResult
+	// importErr and migrationErr are the failures of those two one-time
+	// imports; they are reported instead of the counts.
+	importErr    error
+	migrationErr error
+}
+
+// The two layouts statusOpened's select understands: the folder was widened to
+// the Ultralytics dataset root, or opened as given.
+const (
+	layoutWiden = "widen"
+	layoutKeep  = "keep"
+)
+
+// openDirStatusLine builds the status bar line of a freshly opened folder. The
+// counts that did something are mentioned only when non-zero. A failed IR
+// import is reported before a failed legacy migration: both can only happen on
+// an annotation-free repository, and the IR project is the one that was tried
+// first (docs/phase3-design.md §4.2).
+func openDirStatusLine(dir string, images int, n openDirNotes) string {
+	layout := layoutKeep
+	if n.widened {
+		layout = layoutWiden
+	}
+	switch {
+	case n.importErr != nil:
+		return locales.StatusIRImportFailed(layout, dir, images, n.importErr.Error())
+	case n.migrationErr != nil && n.migrated > 0:
+		return locales.StatusLegacyMigrationPartial(layout, dir, images, n.migrated, n.migrationErr.Error())
+	case n.migrationErr != nil:
+		return locales.StatusLegacyMigrationFailed(layout, dir, images, n.migrationErr.Error())
+	}
+	return locales.StatusOpened(layout, dir, images, n.rotated, n.migrated,
+		n.importResult.Images, n.importResult.Annots, n.importResult.NewCategories,
+		n.importResult.SkippedAnns)
+}
+
+// openDirStatus is the plain open-folder line: no dataset widening, no IR
+// project and no import failure.
 func openDirStatus(dir string, images, rotated, migrated int) string {
-	status := fmt.Sprintf("已打开 %s（%d 张图片）", dir, images)
-	if rotated > 0 {
-		status += fmt.Sprintf("，已转正 %d 张", rotated)
-	}
-	if migrated > 0 {
-		status += fmt.Sprintf("，已迁移旧 JSON 标注 %d 张", migrated)
-	}
-	return status
+	return openDirStatusLine(dir, images, openDirNotes{rotated: rotated, migrated: migrated})
 }
 
 // imagesFromRecs assembles the view's image list from stored rows.
@@ -578,38 +602,38 @@ func (a *App) flushToast(c *ui.Context) {
 func (a *App) toolbar(c *ui.Context) {
 	t := c.Theme()
 	ui.Row(c).FillWidth().Padding(6).Gap(8).Background(t.Surface).Children(func() {
-		if ui.Button(c.Key("open"), "打开文件夹").Clicked() {
+		if ui.Button(c.Key("open"), locales.ToolbarOpenFolder()).Clicked() {
 			paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
 				Parent:    a.win,
-				Title:     "选择图片文件夹",
+				Title:     locales.ToolbarOpenFolderTitle(),
 				Directory: true,
 			})
 			if err == nil && len(paths) > 0 {
 				a.openDir(paths[0])
 			}
 		}
-		if ui.Button(c.Key("save"), "保存 (Ctrl+S)").Clicked() {
+		if ui.Button(c.Key("save"), locales.ToolbarSave()).Clicked() {
 			_ = a.save()
 		}
-		if ui.Button(c.Key("export"), "导出 JSON").Clicked() {
+		if ui.Button(c.Key("export"), locales.ToolbarExportJSON()).Clicked() {
 			if err := a.exportJSON(a.dir); err != nil {
-				a.lastStatus = "导出失败: " + err.Error()
+				a.lastStatus = locales.StatusExportJSONFailed(err.Error())
 			} else {
-				a.lastStatus = "已导出 " + filepath.Join(a.dir, docName)
+				a.lastStatus = locales.StatusExportedJSON(filepath.Join(a.dir, docName))
 			}
 		}
-		if ui.Button(c.Key("import"), "导入标注").Clicked() {
+		if ui.Button(c.Key("import"), locales.ToolbarImportAnnotations()).Clicked() {
 			a.openImportWizard()
 		}
-		if ui.Button(c.Key("exportDataset"), "导出数据集").Clicked() {
+		if ui.Button(c.Key("exportDataset"), locales.ToolbarExportDataset()).Clicked() {
 			a.openExportWizard()
 		}
-		ui.Text(c, "工具:").Padding(8, 0, 0, 0)
-		a.toolButton(c, "toolRect", "矩形 (R)", ToolRect)
-		a.toolButton(c, "toolPoly", "多边形 (P)", ToolPoly)
-		a.toolButton(c, "toolObb", "旋转框 (O)", ToolObb)
+		ui.Text(c, locales.ToolbarTools()).Padding(8, 0, 0, 0)
+		a.toolButton(c, "toolRect", locales.ToolbarToolRect(), ToolRect)
+		a.toolButton(c, "toolPoly", locales.ToolbarToolPoly(), ToolPoly)
+		a.toolButton(c, "toolObb", locales.ToolbarToolObb(), ToolObb)
 		a.labelButton(c)
-		ui.Text(c, "数字键 1-9 改类别，双击标注改属性，Ctrl+D 标记完成，A/D 切换图片，Ctrl+B 沿用上一张").Padding(8, 0, 0, 0).TextColor(t.TextMuted)
+		ui.Text(c, locales.ToolbarShortcutHint()).Padding(8, 0, 0, 0).TextColor(t.TextMuted)
 	})
 }
 
@@ -618,9 +642,9 @@ func (a *App) toolbar(c *ui.Context) {
 func (a *App) labelButton(c *ui.Context) {
 	var btn ui.Element
 	if a.showLabels {
-		btn = ui.PrimaryButton(c.Key("labels"), "标签 (L)")
+		btn = ui.PrimaryButton(c.Key("labels"), locales.ToolbarLabels())
 	} else {
-		btn = ui.Button(c.Key("labels"), "标签 (L)")
+		btn = ui.Button(c.Key("labels"), locales.ToolbarLabels())
 	}
 	if btn.Clicked() {
 		a.toggleLabels()
@@ -631,9 +655,9 @@ func (a *App) labelButton(c *ui.Context) {
 func (a *App) toggleLabels() {
 	a.showLabels = !a.showLabels
 	if a.showLabels {
-		a.lastStatus = "已显示类别标签"
+		a.lastStatus = locales.ToolbarLabelsShown()
 	} else {
-		a.lastStatus = "已隐藏类别标签"
+		a.lastStatus = locales.ToolbarLabelsHidden()
 	}
 }
 
@@ -711,19 +735,19 @@ func (a *App) statusBar(c *ui.Context) {
 		status = statusLabel(img.Status)
 	}
 	ui.Row(c).FillWidth().Padding(4, 8, 4, 8).Gap(16).Background(t.Surface).Children(func() {
-		ui.Textf(c, "图片 %d/%d", a.loaded+1, len(a.images)).FontSize(11)
+		ui.Text(c, locales.StatusImageOf(a.loaded+1, len(a.images))).FontSize(11)
 		ui.Text(c, cur).FontSize(11)
-		ui.Textf(c, "标注 %d", annCount).FontSize(11)
+		ui.Text(c, locales.StatusAnnots(annCount)).FontSize(11)
 		if status != "" {
-			ui.Text(c, "状态 "+status).FontSize(11)
+			ui.Text(c, locales.StatusState(status)).FontSize(11)
 		}
 		if n := a.selectionCount(); n > 1 {
-			ui.Textf(c, "选中 %d", n).FontSize(11).TextColor(t.Accent)
+			ui.Text(c, locales.StatusSelectedCount(n)).FontSize(11).TextColor(t.Accent)
 		}
-		ui.Textf(c, "缩放 %.0f%%", a.zoom*100).FontSize(11)
-		ui.Textf(c, "内存 %.0f MB", float64(ms.Alloc)/1048576).FontSize(11)
+		ui.Text(c, locales.StatusZoom(int(math.Round(a.zoom*100)))).FontSize(11)
+		ui.Text(c, locales.StatusMemory(int(math.Round(float64(ms.Alloc)/1048576)))).FontSize(11)
 		if a.dirty {
-			ui.Text(c, "●未保存").FontSize(11).TextColor(t.Warning)
+			ui.Text(c, locales.StatusUnsaved()).FontSize(11).TextColor(t.Warning)
 		}
 		ui.Text(c, a.lastStatus).FontSize(11).TextColor(t.TextMuted)
 	})

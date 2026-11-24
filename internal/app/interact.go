@@ -4,12 +4,9 @@ import (
 	"math"
 
 	"github.com/egoist/mygo/ui"
-)
 
-// statusNoCategories is the status line shown when an annotation would be
-// created in a workspace that has no category yet: every annotation carries
-// one, so the panel's 添加 comes first.
-const statusNoCategories = "请先在右侧面板添加类别"
+	"mylabel/locales"
+)
 
 // handleCanvasInput is the canvas interaction state machine. All pointer
 // positions are converted to image pixels by pointerImage, the inverse of the
@@ -207,7 +204,7 @@ func (a *App) pointerDown(ev ui.InputEvent) bool {
 			// list cannot empty under it, since a category in use cannot be
 			// deleted.
 			if len(a.categories) == 0 {
-				a.lastStatus = statusNoCategories
+				a.lastStatus = locales.StatusNoCategories()
 				return true
 			}
 			if a.tool == ToolPoly || a.tool == ToolObb {
@@ -772,7 +769,7 @@ func (a *App) setTool(t Tool) {
 // Kind is the kind the finished annotation will have.
 func (a *App) startPolyDraft(p Point) {
 	if len(a.categories) == 0 {
-		a.lastStatus = statusNoCategories
+		a.lastStatus = locales.StatusNoCategories()
 		return
 	}
 	a.mode = ModePolyCreate
@@ -861,7 +858,7 @@ func (a *App) closeObbDraft() bool {
 	box, ok := obbFromPoints(pts)
 	if !ok {
 		a.cancelPolyDraft()
-		a.lastStatus = "旋转框太小，已放弃"
+		a.lastStatus = locales.StatusObbTooSmall()
 		return false
 	}
 	box.ID = a.draft.ID

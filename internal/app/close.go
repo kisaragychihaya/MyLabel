@@ -1,6 +1,10 @@
 package app
 
-import "github.com/egoist/mygo"
+import (
+	"github.com/egoist/mygo"
+
+	"mylabel/locales"
+)
 
 // ConfirmClose flushes pending changes and asks the user before closing the
 // window with unsaved changes. It returns true when the window may close.
@@ -20,9 +24,9 @@ func (a *App) ConfirmClose() bool {
 	res, err := mygo.Dialog.Message(mygo.MessageOptions{
 		Parent:             a.win,
 		Type:               mygo.MessageWarning,
-		Title:              "未保存的修改",
-		Message:            "标注尚未保存，退出前是否保存？",
-		Buttons:            []string{"保存并退出", "不保存退出", "取消"},
+		Title:              locales.CloseGuardTitle(),
+		Message:            locales.CloseGuardMessage(),
+		Buttons:            []string{locales.CloseGuardSave(), locales.CloseGuardDiscard(), locales.CommonCancel()},
 		DefaultButton:      0,
 		CancelButton:       2,
 		DestructiveButtons: []int{1},

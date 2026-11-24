@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"mylabel/internal/exporter"
+	"mylabel/locales"
 )
 
 // The export wizard (docs/phase4-design.md §9): 格式 → split → dry-run 报告 →
@@ -46,13 +47,13 @@ const (
 func (s exportStep) title() string {
 	switch s {
 	case expStepFormat:
-		return "格式"
+		return locales.WizardExportStepFormat()
 	case expStepSplit:
-		return "划分"
+		return locales.WizardExportStepSplit()
 	case expStepReport:
-		return "试运行报告"
+		return locales.WizardExportStepReport()
 	case expStepOutput:
-		return "输出目录"
+		return locales.WizardExportStepOutput()
 	}
 	return ""
 }
@@ -80,11 +81,11 @@ func exportFormatLabel(f exporter.Format) string {
 func exportTaskLabel(t exporter.Task) string {
 	switch t {
 	case exporter.TaskDet:
-		return "det 检测框"
+		return locales.WizardExportTaskDet()
 	case exporter.TaskSeg:
-		return "seg 分割"
+		return locales.WizardExportTaskSeg()
 	case exporter.TaskObb:
-		return "obb 旋转框"
+		return locales.WizardExportTaskObb()
 	}
 	return string(t)
 }
@@ -152,7 +153,7 @@ type exportState struct {
 // reports it instead of opening an empty dialog.
 func (a *App) openExportWizard() {
 	if a.dir == "" || len(a.images) == 0 {
-		a.lastStatus = "请先打开图片文件夹再导出数据集"
+		a.lastStatus = locales.WizardExportNoWorkspace()
 		return
 	}
 	a.ex = exportState{
@@ -242,7 +243,7 @@ func (s *exportState) options() (exporter.Options, error) {
 	if s.SplitMode == exporter.SplitRandom {
 		seed, err := strconv.ParseInt(strings.TrimSpace(s.Seed), 10, 64)
 		if err != nil {
-			return opts, fmt.Errorf("随机种子必须是整数：%q", strings.TrimSpace(s.Seed))
+			return opts, fmt.Errorf("%s", locales.WizardExportBadSeed(strings.TrimSpace(s.Seed)))
 		}
 		opts.Split.TrainRatio, opts.Split.Seed = s.Ratio, seed
 	}
@@ -284,16 +285,16 @@ func (s *exportState) exportOutDir() string {
 // can say why before the user presses 开始导出.
 func checkExportTarget(outDir string) error {
 	if strings.TrimSpace(outDir) == "" {
-		return errors.New("请选择输出位置并填写目录名")
+		return errors.New(locales.WizardExportNeedTarget())
 	}
 	if _, err := os.Stat(outDir); err == nil {
-		return fmt.Errorf("目录已存在，导出不会覆盖：%s", outDir)
+		return fmt.Errorf("%s", locales.WizardExportTargetExists(outDir))
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("无法检查目标目录：%v", err)
+		return fmt.Errorf("%s", locales.WizardExportTargetCheckFailed(err.Error()))
 	}
 	parent := filepath.Dir(outDir)
 	if st, err := os.Stat(parent); err != nil || !st.IsDir() {
-		return fmt.Errorf("上级目录不存在：%s", parent)
+		return fmt.Errorf("%s", locales.WizardExportParentMissing(parent))
 	}
 	return nil
 }
@@ -303,12 +304,12 @@ func checkExportTarget(outDir string) error {
 func exportNameValid(name string) error {
 	switch strings.TrimSpace(name) {
 	case "":
-		return errors.New("请填写目录名")
+		return errors.New(locales.WizardExportNeedName())
 	case ".", "..":
-		return fmt.Errorf("目录名不能是 %q", name)
+		return fmt.Errorf("%s", locales.WizardExportBadName(name))
 	}
 	if strings.ContainsAny(name, `/\:`) {
-		return errors.New("目录名不能包含路径分隔符")
+		return errors.New(locales.WizardExportBadNameSeparator())
 	}
 	return nil
 }
@@ -365,23 +366,23 @@ func (a *App) finishExport(outDir string, err error) {
 		// The exporter removed its temp folder on the way out, so nothing was
 		// written and the same plan can run again (§5.2). Not Done: this run did
 		// not land.
-		s.RunErr = "已取消导出（未写出任何文件）"
-		a.toast = "导出已取消"
+		s.RunErr = locales.WizardExportCanceled()
+		a.toast = locales.ToastExportCanceled()
 		return
 	}
 	if err != nil {
 		// RunErr, not DirErr: the page refreshes DirErr from the live check every
 		// frame, which would wipe a message about what already went wrong.
-		s.RunErr = "导出失败：" + err.Error()
-		a.toast = "导出失败：" + err.Error()
+		s.RunErr = locales.WizardExportRunFailed(err.Error())
+		a.toast = s.RunErr
 		return
 	}
 	s.RunErr = ""
 	s.Done = true
 	s.OutPath = outDir
 	s.Written = s.Total
-	a.lastStatus = "已导出数据集到 " + outDir
-	a.toast = "已导出数据集到 " + outDir
+	a.lastStatus = locales.WizardExportDone(outDir)
+	a.toast = a.lastStatus
 }
 
 // cancelExport stops the running write. The exporter checks the context at each
@@ -396,7 +397,7 @@ func (a *App) cancelExport() {
 	// Gone before the run ends: nothing else may cancel it, and the button turns
 	// disabled so a second click cannot ask twice (§5.2).
 	s.Cancel = nil
-	a.lastStatus = "正在取消导出…"
+	a.lastStatus = locales.WizardExportCanceling()
 }
 
 // browseExportParent asks the platform for the folder the export goes into. Like
@@ -408,7 +409,7 @@ func (a *App) browseExportParent() {
 	}
 	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
 		Parent:    a.win,
-		Title:     "选择导出位置",
+		Title:     locales.WizardExportBrowseTitle(),
 		Directory: true,
 	})
 	if err != nil || len(paths) == 0 {
@@ -427,9 +428,9 @@ func (a *App) exportModal(c *ui.Context) {
 	ui.Modal(c, &s.Open, func() {
 		ui.Column(c).Width(760).Gap(10).Children(func() {
 			ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "导出数据集").FontSize(14).Bold()
-				ui.Textf(c, "第 %d/4 步 · %s", int(s.Step)+1, s.Step.title()).FontSize(11).TextColor(t.TextMuted)
-				ui.Textf(c, "%d 张图片 / %d 条标注", len(a.images), a.exportAnnCount()).FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, locales.WizardExportTitle()).FontSize(14).Bold()
+				ui.Text(c, locales.WizardExportStepCounter(int(s.Step)+1, s.Step.title())).FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, locales.WizardExportCounts(len(a.images), a.exportAnnCount())).FontSize(11).TextColor(t.TextMuted)
 			})
 			switch s.Step {
 			case expStepFormat:
@@ -454,27 +455,27 @@ func (a *App) exportModal(c *ui.Context) {
 func (a *App) exportFormatPage(c *ui.Context) {
 	s := &a.ex
 	t := c.Theme()
-	ui.Text(c, "1. 选择目标格式").FontSize(12)
+	ui.Text(c, locales.WizardExportHeadingFormat()).FontSize(12)
 	ui.RadioGroup(c, func() {
 		for _, f := range exportFormats {
 			ui.Radio(c.Key("expFmt"+string(f)), &s.Format, f, exportFormatLabel(f))
 		}
-	}).Row().Gap(16).Label("导出格式")
+	}).Row().Gap(16).Label(locales.WizardExportFormatLabel())
 	if s.Format == exporter.FormatYOLO {
-		ui.Text(c, "YOLO 任务（默认按当前标注内容推断）").FontSize(11).TextColor(t.TextMuted)
+		ui.Text(c, locales.WizardExportYoloTaskHint()).FontSize(11).TextColor(t.TextMuted)
 		ui.RadioGroup(c, func() {
 			for _, task := range exportTasks {
 				ui.Radio(c.Key("expTask"+string(task)), &s.Task, task, exportTaskLabel(task))
 			}
-		}).Row().Gap(16).Label("YOLO 任务")
+		}).Row().Gap(16).Label(locales.WizardExportYoloTaskLabel())
 	}
 	if s.Format == exporter.FormatVOC {
-		ui.Checkbox(c.Key("expVocOneBased"), &s.VOCOneBased, "bndbox 写 1-based 坐标（VOC 官方惯例）").Label("VOC 1-based")
-		ui.Checkbox(c.Key("expVocSeg"), &s.VOCSeg, "导出分割 PNG 掩码（SegmentationClass/Object）").Label("VOC seg 掩码")
-		ui.Checkbox(c.Key("expVocDowngrade"), &s.VOCDowngrade, "旋转框降级为外接 bndbox（有损，丢方向）").Label("VOC 降级 OBB")
+		ui.Checkbox(c.Key("expVocOneBased"), &s.VOCOneBased, locales.WizardExportVocOneBased()).Label(locales.WizardExportVocOneBasedLabel())
+		ui.Checkbox(c.Key("expVocSeg"), &s.VOCSeg, locales.WizardExportVocSeg()).Label(locales.WizardExportVocSegLabel())
+		ui.Checkbox(c.Key("expVocDowngrade"), &s.VOCDowngrade, locales.WizardExportVocDowngrade()).Label(locales.WizardExportVocDowngradeLabel())
 	}
 	if s.Format == exporter.FormatCOCO {
-		ui.Text(c, "COCO 导出旋转框会写非标准扩展字段 mylabel_obb，报告里会列出条数").FontSize(10).TextColor(t.TextMuted)
+		ui.Text(c, locales.WizardExportCocoObbNote()).FontSize(10).TextColor(t.TextMuted)
 	}
 }
 
@@ -482,22 +483,22 @@ func (a *App) exportFormatPage(c *ui.Context) {
 func (a *App) exportSplitPage(c *ui.Context) {
 	s := &a.ex
 	t := c.Theme()
-	ui.Text(c, "2. 训练/验证划分").FontSize(12)
+	ui.Text(c, locales.WizardExportHeadingSplit()).FontSize(12)
 	ui.RadioGroup(c, func() {
-		ui.Radio(c.Key("expSplitPreserve"), &s.SplitMode, exporter.SplitPreserve, "保留源目录的 train/val，其余归 train")
-		ui.Radio(c.Key("expSplitRandom"), &s.SplitMode, exporter.SplitRandom, "按比例随机划分（同种子可复现）")
-	}).Label("划分方式")
+		ui.Radio(c.Key("expSplitPreserve"), &s.SplitMode, exporter.SplitPreserve, locales.WizardExportSplitPreserve())
+		ui.Radio(c.Key("expSplitRandom"), &s.SplitMode, exporter.SplitRandom, locales.WizardExportSplitRandom())
+	}).Label(locales.WizardExportSplitLabel())
 	if s.SplitMode == exporter.SplitRandom {
 		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "训练集比例").FontSize(11).TextColor(t.TextMuted)
-			ui.NumberInput(c, &s.Ratio, 0.05, 0.95, 0.05).Label("训练集比例")
-			ui.Text(c, "种子").FontSize(11).TextColor(t.TextMuted)
-			ui.TextInput(c.Key("expSeed"), &s.Seed).Width(120).Label("随机种子")
-			ui.Text(c, "同比例同种子每次划分结果一致").FontSize(10).TextColor(t.TextMuted)
+			ui.Text(c, locales.WizardExportRatio()).FontSize(11).TextColor(t.TextMuted)
+			ui.NumberInput(c, &s.Ratio, 0.05, 0.95, 0.05).Label(locales.WizardExportRatioField())
+			ui.Text(c, locales.WizardExportSeedLabel()).FontSize(11).TextColor(t.TextMuted)
+			ui.TextInput(c.Key("expSeed"), &s.Seed).Width(120).Label(locales.WizardExportSeedField())
+			ui.Text(c, locales.WizardExportSeedHint()).FontSize(10).TextColor(t.TextMuted)
 		})
 	}
 	if s.Err != "" {
-		ui.Text(c, "设置无效："+s.Err).FontSize(11).TextColor(t.Danger)
+		ui.Text(c, locales.WizardExportInvalid(s.Err)).FontSize(11).TextColor(t.Danger)
 	}
 }
 
@@ -506,20 +507,20 @@ func (a *App) exportReportPage(c *ui.Context) {
 	s := &a.ex
 	t := c.Theme()
 	if s.Err != "" {
-		ui.Text(c, "无法导出").FontSize(12).TextColor(t.Danger)
+		ui.Text(c, locales.WizardExportCantExport()).FontSize(12).TextColor(t.Danger)
 		ui.Scroll(c).Height(300).Children(func() {
 			ui.Text(c, s.Err).FontSize(11).TextColor(t.Danger)
 		})
 		return
 	}
 	rep := s.Plan.Report
-	ui.Textf(c, "试运行报告：%d 张图片（%d 张有标注）/ %d 条标注，丢弃 %d 条",
-		rep.Images, rep.ImagesWithAnns, rep.Annotations, rep.AnnotationsDropped).FontSize(12)
+	ui.Text(c, locales.WizardExportReport(rep.Images, rep.ImagesWithAnns,
+		rep.Annotations, rep.AnnotationsDropped)).FontSize(12)
 	train, val := splitCounts(s.Plan.Splits)
-	ui.Textf(c, "划分：train %d 张，val %d 张；类别 %d 个（%s）",
-		train, val, len(s.Plan.Categories), strings.Join(planCategoryNames(s.Plan), "、")).FontSize(11).TextColor(t.TextMuted)
+	ui.Text(c, locales.WizardExportSplitCounts(train, val, len(s.Plan.Categories),
+		strings.Join(planCategoryNames(s.Plan), "、"))).FontSize(11).TextColor(t.TextMuted)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		btn := ui.Button(c.Key("expAdjust"), "逐图调整…")
+		btn := ui.Button(c.Key("expAdjust"), locales.WizardExportAdjust())
 		if s.Busy || s.Done {
 			// A run in flight owns the plan, and a finished one is already written.
 			btn = btn.Disabled(true)
@@ -527,40 +528,34 @@ func (a *App) exportReportPage(c *ui.Context) {
 		if btn.Clicked() {
 			a.openExportAdjust()
 		}
-		ui.Text(c, "逐图改划分不碰源文件，只影响导出").FontSize(10).TextColor(t.TextMuted)
+		ui.Text(c, locales.WizardExportAdjustHint()).FontSize(10).TextColor(t.TextMuted)
 	})
 	if a.dirty {
 		// The export reads the session, not the store, so pending edits are
 		// included; say so instead of demanding a save (§9 保存检查的反向做法).
-		ui.Text(c, "当前有未保存的修改：导出按屏幕上的内容进行，不要求先保存").FontSize(10).TextColor(t.TextMuted)
+		ui.Text(c, locales.WizardExportDirtyNote()).FontSize(10).TextColor(t.TextMuted)
 	}
 	ui.Divider(c)
 	ui.Scroll(c).Height(280).Children(func() {
 		ui.Column(c).Gap(4).Children(func() {
 			if len(rep.Lossy) == 0 && len(rep.Warnings) == 0 {
-				ui.Text(c, "没有有损转换或警告").FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, locales.WizardExportNoLossy()).FontSize(11).TextColor(t.TextMuted)
 			}
 			for _, stat := range rep.Lossy {
-				ui.Textf(c, "%s ×%d", stat.Rule, stat.Count).FontSize(11).TextColor(t.Warning)
+				ui.Text(c, locales.WizardExportLossyRule(stat.Rule, stat.Count)).FontSize(11).TextColor(t.Warning)
 				for i, smp := range stat.Samples {
 					if i >= reportSamples {
 						break
 					}
-					line := "示例：" + smp.File
-					if smp.AnnID != "" {
-						line += " 标注 " + smp.AnnID
-					}
-					if smp.Message != "" {
-						line += " — " + smp.Message
-					}
-					ui.Text(c, line).FontSize(10).TextColor(t.TextMuted).SingleLine().TruncateMiddle()
+					ui.Text(c, exportSampleLine(smp)).FontSize(10).
+						TextColor(t.TextMuted).SingleLine().TruncateMiddle()
 				}
 			}
 			for _, w := range rep.Warnings {
-				ui.Text(c, "警告："+w).FontSize(11).TextColor(t.Warning).SingleLine().TruncateMiddle()
+				ui.Text(c, locales.WizardExportWarning(w)).FontSize(11).TextColor(t.Warning).SingleLine().TruncateMiddle()
 			}
 			if len(a.categories) == 0 {
-				ui.Text(c, "当前工作区没有类别：所有标注都会被丢弃").FontSize(11).TextColor(t.Danger)
+				ui.Text(c, locales.WizardExportNoCategories()).FontSize(11).TextColor(t.Danger)
 			}
 		})
 	})
@@ -569,6 +564,20 @@ func (a *App) exportReportPage(c *ui.Context) {
 // reportSamples is how many examples per lossy rule the report lists (the
 // exporter keeps up to five; three fit the page without a wall of text).
 const reportSamples = 3
+
+// exportSampleLine renders one example of a lossy rule: the file it fired on,
+// and whatever else the exporter recorded about it.
+func exportSampleLine(smp exporter.Issue) string {
+	switch {
+	case smp.AnnID != "" && smp.Message != "":
+		return locales.WizardExportSampleAnnMessage(smp.File, smp.AnnID, smp.Message)
+	case smp.AnnID != "":
+		return locales.WizardExportSampleAnn(smp.File, smp.AnnID)
+	case smp.Message != "":
+		return locales.WizardExportSampleMessage(smp.File, smp.Message)
+	}
+	return locales.WizardExportSampleFile(smp.File)
+}
 
 // splitCounts counts the images of a plan's train and val halves.
 func splitCounts(splits map[string]string) (train, val int) {
@@ -600,31 +609,31 @@ func planCategoryNames(p *exporter.Plan) []string {
 func (a *App) exportOutputPage(c *ui.Context) {
 	s := &a.ex
 	t := c.Theme()
-	ui.Text(c, "4. 选择输出位置（导出会在这里新建一个目录，已存在的目录不会被覆盖）").FontSize(12)
+	ui.Text(c, locales.WizardExportHeadingOutput()).FontSize(12)
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.TextInput(c.Key("expParent"), &s.Parent).Grow(1).Label("导出位置")
-		if ui.Button(c.Key("expBrowse"), "浏览…").Clicked() {
+		ui.TextInput(c.Key("expParent"), &s.Parent).Grow(1).Label(locales.WizardExportParentLabel())
+		if ui.Button(c.Key("expBrowse"), locales.CommonBrowse()).Clicked() {
 			a.browseExportParent()
 		}
 	})
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "目录名").FontSize(11).TextColor(t.TextMuted)
-		ui.TextInput(c.Key("expDirName"), &s.DirName).Width(240).Label("导出目录名")
+		ui.Text(c, locales.WizardExportDirNameLabel()).FontSize(11).TextColor(t.TextMuted)
+		ui.TextInput(c.Key("expDirName"), &s.DirName).Width(240).Label(locales.WizardExportDirNameField())
 	})
 	outDir := s.exportOutDir()
-	ui.Text(c, "将写入："+outDir).FontSize(11).TextColor(t.TextMuted).SingleLine().TruncateMiddle()
+	ui.Text(c, locales.WizardExportWillWrite(outDir)).FontSize(11).TextColor(t.TextMuted).SingleLine().TruncateMiddle()
 
 	// Live validation, so an existing folder is reported before the run instead
 	// of by the exporter's error.
 	s.DirErr = s.targetError()
 
 	if s.Done {
-		ui.Text(c, "导出完成："+s.OutPath).FontSize(12).TextColor(t.Accent)
+		ui.Text(c, locales.WizardExportDonePath(s.OutPath)).FontSize(12).TextColor(t.Accent)
 	} else if s.Busy {
-		ui.Progress(c, exportRatio(s.Written, s.Total)).Label("导出进度")
+		ui.Progress(c, exportRatio(s.Written, s.Total)).Label(locales.WizardExportProgressLabel())
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-			ui.Textf(c, "正在写入 %d/%d", s.Written, s.Total).FontSize(11).TextColor(t.TextMuted)
-			btn := ui.Button(c.Key("expCancel"), "取消导出")
+			ui.Text(c, locales.WizardExportWriting(s.Written, s.Total)).FontSize(11).TextColor(t.TextMuted)
+			btn := ui.Button(c.Key("expCancel"), locales.WizardExportCancel())
 			if s.Cancel == nil {
 				// Already cancelled: one call per run, and this one is on its way out.
 				btn = btn.Disabled(true)
@@ -669,7 +678,7 @@ func (a *App) exportFooter(c *ui.Context) {
 	s := &a.ex
 	ui.Row(c).Gap(8).Children(func() {
 		if s.Step > expStepFormat && !s.Busy && !s.Done {
-			if ui.Button(c.Key("expBack"), "上一步").Clicked() {
+			if ui.Button(c.Key("expBack"), locales.CommonBack()).Clicked() {
 				a.exportBack()
 			}
 		}
@@ -678,7 +687,7 @@ func (a *App) exportFooter(c *ui.Context) {
 			if s.Done {
 				break
 			}
-			btn := ui.PrimaryButton(c.Key("expStart"), "开始导出")
+			btn := ui.PrimaryButton(c.Key("expStart"), locales.WizardExportStart())
 			if s.Busy || s.DirErr != "" {
 				btn = btn.Disabled(true)
 			}
@@ -688,11 +697,11 @@ func (a *App) exportFooter(c *ui.Context) {
 		case s.Step == expStepReport && s.Plan == nil:
 			// Nothing to confirm when the plan failed: the report is the error.
 		case s.Step < expStepOutput:
-			if ui.Button(c.Key("expNext"), "下一步").Clicked() {
+			if ui.Button(c.Key("expNext"), locales.CommonNext()).Clicked() {
 				a.exportNext()
 			}
 		}
-		if ui.Button(c.Key("expClose"), "关闭").Clicked() {
+		if ui.Button(c.Key("expClose"), locales.CommonClose()).Clicked() {
 			a.closeExportWizard()
 		}
 	})
@@ -843,20 +852,20 @@ func (a *App) exportAdjustModal(c *ui.Context) {
 	ui.Modal(c, &s.Adjust, func() {
 		ui.Column(c).Width(520).Gap(8).Children(func() {
 			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "逐图调整划分").FontSize(14).Bold()
+				ui.Text(c, locales.WizardExportAdjustTitle()).FontSize(14).Bold()
 				train, val := adjustCounts(s)
-				ui.Textf(c, "train %d 张 / val %d 张", train, val).FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, locales.WizardExportAdjustCounts(train, val)).FontSize(11).TextColor(t.TextMuted)
 			})
-			ui.Text(c, "点击一行在 train 与 val 之间切换；改回自动划分的结果即恢复原样").FontSize(10).TextColor(t.TextMuted)
+			ui.Text(c, locales.WizardExportAdjustNote()).FontSize(10).TextColor(t.TextMuted)
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.TextInput(c.Key("expAdjustFilter"), &s.AdjustFilter).Grow(1).Label("按文件名筛选")
-				ui.Textf(c, "%d 张", len(s.adjustFiles)).FontSize(10).TextColor(t.TextMuted)
+				ui.TextInput(c.Key("expAdjustFilter"), &s.AdjustFilter).Grow(1).Label(locales.WizardExportAdjustFilter())
+				ui.Text(c, locales.WizardExportAdjustTotal(len(s.adjustFiles))).FontSize(10).TextColor(t.TextMuted)
 			})
 			if s.adjustFilter != strings.TrimSpace(s.AdjustFilter) {
 				a.refreshAdjustFiles()
 			}
 			if len(s.adjustFiles) == 0 {
-				ui.Text(c, "没有匹配的图片").FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, locales.WizardExportAdjustNoMatch()).FontSize(11).TextColor(t.TextMuted)
 			}
 			// The rows live in state: a virtualized list builds only what it shows
 			// and recycles the rest (design rule 4).
@@ -891,10 +900,10 @@ func (a *App) exportAdjustModal(c *ui.Context) {
 				})
 			}).Height(300)
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				if ui.Button(c.Key("expAdjustReset"), "全部重置").Clicked() {
+				if ui.Button(c.Key("expAdjustReset"), locales.WizardExportAdjustReset()).Clicked() {
 					a.resetAdjustSplits()
 				}
-				if ui.PrimaryButton(c.Key("expAdjustDone"), "完成").Clicked() {
+				if ui.PrimaryButton(c.Key("expAdjustDone"), locales.CommonDone()).Clicked() {
 					s.Adjust = false
 				}
 			})

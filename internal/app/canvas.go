@@ -4,14 +4,11 @@ import (
 	"math"
 
 	"github.com/egoist/mygo/ui"
+
+	"mylabel/locales"
 )
 
 const (
-	// canvasLabel is the canvas's accessible name; tests find the canvas's
-	// box through it (ui.Tester.Find).
-	canvasLabel = "标注画布"
-	// canvasHint is shown while no image is loaded.
-	canvasHint = "点击“打开文件夹”载入图片"
 	// annStrokeDIP is the annotation outline width, in screen DIP.
 	annStrokeDIP = 1.5
 	// annSelectedStrokeDIP is the outline width of the selected annotation: a
@@ -62,7 +59,7 @@ func (a *App) canvasView(c *ui.Context) ui.Element {
 	// the sizes measured here.
 	a.refreshChipSizes(c)
 
-	cv := ui.Box(c).FillWidth().Grow(1).Clip().Label(canvasLabel)
+	cv := ui.Box(c).FillWidth().Grow(1).Clip().Label(locales.HintCanvasName())
 	cv.Bind(&a.canvasRef)
 	cv.Focusable()
 	if a.spacePan {
@@ -111,7 +108,7 @@ func (a *App) fitToCanvas(r ui.Rect) {
 func (a *App) drawCanvas(p *ui.Painter, r ui.Rect, bg, muted ui.Color) {
 	p.Fill(r, bg, 0)
 	if a.bmp == nil && a.tiled == nil {
-		p.Text(r.X+16, r.Y+16, canvasHint, 14, muted)
+		p.Text(r.X+16, r.Y+16, locales.HintCanvasEmpty(), 14, muted)
 		return
 	}
 

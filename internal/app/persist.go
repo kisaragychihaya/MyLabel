@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"mylabel/internal/store"
+	"mylabel/locales"
 )
 
 // docName is the annotation document file name inside the image folder. Since
@@ -41,7 +42,7 @@ func (a *App) save() error {
 	}
 
 	if err := st.SetCategories(a.categories); err != nil {
-		a.lastStatus = "保存失败: " + err.Error()
+		a.lastStatus = locales.StatusSaveFailed(err.Error())
 		return err
 	}
 
@@ -67,7 +68,7 @@ func (a *App) save() error {
 			continue
 		}
 		if err := st.ReplaceAnns(id, annsToRecs(img.Anns)); err != nil {
-			a.lastStatus = "保存失败: " + err.Error()
+			a.lastStatus = locales.StatusSaveFailed(err.Error())
 			return err
 		}
 		delete(a.dirtyImages, id)
@@ -76,9 +77,9 @@ func (a *App) save() error {
 
 	a.dirty = false
 	if saved == 0 {
-		a.lastStatus = "已保存（无标注改动）"
+		a.lastStatus = locales.StatusSavedNothing()
 	} else {
-		a.lastStatus = fmt.Sprintf("已保存 %d 张图片的标注", saved)
+		a.lastStatus = locales.StatusSavedImages(saved)
 	}
 	return nil
 }
@@ -112,7 +113,7 @@ func (a *App) scheduleSave() {
 // export file (docs/phase1-design.md §5.3).
 func (a *App) exportJSON(dir string) error {
 	if dir == "" {
-		return errors.New("未打开文件夹")
+		return errors.New(locales.ErrorNoFolder())
 	}
 	// The PoC document format carries plain names only: the exchange file drops
 	// the custom colors, which live in the working repository (phase2 §6).
@@ -162,7 +163,7 @@ func loadDoc(dir string) (*docFile, error) {
 	}
 	var doc docFile
 	if err := json.Unmarshal(data, &doc); err != nil {
-		return nil, fmt.Errorf("%s: 解析失败: %w", docName, err)
+		return nil, fmt.Errorf("%s", locales.ErrorParseDoc(docName, err.Error()))
 	}
 	return &doc, nil
 }

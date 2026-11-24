@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/egoist/mygo/ui"
+
+	"mylabel/locales"
 )
 
 // Two menus that act on one annotation, both named by image and index and
@@ -78,7 +80,7 @@ func (a *App) pickCategory(cat int) {
 	after := before
 	after.Cat = cat
 	a.push(cmdModify(a, a.loaded, idx, before, after))
-	a.lastStatus = "已改为类别 " + a.categories[cat].Name
+	a.lastStatus = locales.CatPickChanged(a.categories[cat].Name)
 }
 
 // catPickModal draws the category picker: one radio row per category, the
@@ -99,7 +101,7 @@ func (a *App) catPickModal(c *ui.Context) {
 	// The categories may have shrunk under the dialog (an undo of 添加): the
 	// current category then names nothing, and clamping keeps a pick in range.
 	m.Cat = clampCat(m.Cat, len(a.categories))
-	current := "未分类"
+	current := locales.CatPickUncategorized()
 	if m.Cat >= 0 && m.Cat < len(a.categories) {
 		current = a.categories[m.Cat].Name
 	}
@@ -108,8 +110,8 @@ func (a *App) catPickModal(c *ui.Context) {
 	ui.Modal(c, &m.Open, func() {
 		ui.Column(c).Width(catPickWidth).Gap(8).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "选择类别").FontSize(14).Bold()
-				ui.Textf(c, "第 %d 条 · 当前“%s”", m.Index+1, current).FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, locales.CatPickTitle()).FontSize(14).Bold()
+				ui.Text(c, locales.CatPickSubtitle(m.Index+1, current)).FontSize(11).TextColor(t.TextMuted)
 			})
 			ui.Scroll(c).Height(280).Children(func() {
 				ui.Column(c).Gap(2).Children(func() {
@@ -123,7 +125,7 @@ func (a *App) catPickModal(c *ui.Context) {
 				})
 			})
 			ui.Row(c).Gap(8).Children(func() {
-				if ui.Button(c.Key("catPickCancel"), "取消").Clicked() {
+				if ui.Button(c.Key("catPickCancel"), locales.CommonCancel()).Clicked() {
 					a.catPick = catPickState{}
 				}
 			})
@@ -165,16 +167,31 @@ const (
 	zBottom
 )
 
-// zMenuLabels names each move, in the interface's language and in menu order.
-var zMenuLabels = []struct {
-	kind  reorderKind
-	key   string
-	label string
+// zMoves lists each move in menu order: its kind and the key of its button.
+var zMoves = []struct {
+	kind reorderKind
+	key  string
 }{
-	{zUp, "zUp", "上移一层"},
-	{zDown, "zDown", "下移一层"},
-	{zTop, "zTop", "移到顶部"},
-	{zBottom, "zBottom", "移到底部"},
+	{zUp, "zUp"},
+	{zDown, "zDown"},
+	{zTop, "zTop"},
+	{zBottom, "zBottom"},
+}
+
+// zMenuLabel names one move in the interface's language, read per frame: a
+// package-level label would freeze the language the app started in.
+func zMenuLabel(kind reorderKind) string {
+	switch kind {
+	case zUp:
+		return locales.MenuZUp()
+	case zDown:
+		return locales.MenuZDown()
+	case zTop:
+		return locales.MenuZTop()
+	case zBottom:
+		return locales.MenuZBottom()
+	}
+	return ""
 }
 
 // zMenuState is the z-order menu's state: the annotation it acts on and where it
@@ -309,9 +326,9 @@ func (a *App) zMenuPanel(c *ui.Context) {
 	}
 	idx := a.zMenu.Index
 	ui.Column(c).Gap(2).Children(func() {
-		for _, item := range zMenuLabels {
+		for _, item := range zMoves {
 			_, enabled := reorderTarget(item.kind, idx, n)
-			btn := ui.Button(c.Key(item.key), item.label)
+			btn := ui.Button(c.Key(item.key), zMenuLabel(item.kind))
 			if !enabled {
 				btn = btn.Disabled(true)
 			}

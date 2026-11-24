@@ -12,6 +12,7 @@ import (
 
 	"mylabel/internal/importer"
 	"mylabel/internal/ir"
+	"mylabel/locales"
 )
 
 // The import wizard (docs/phase3-design.md §4.2): 格式 → 路径 → 解析预览与类别
@@ -43,9 +44,9 @@ func (f importFormat) label() string {
 	case formatVOC:
 		return "VOC"
 	case formatIR:
-		return "IR 项目"
+		return locales.WizardImportFormatIR()
 	}
-	return "未知"
+	return locales.WizardImportFormatUnknown()
 }
 
 // wantsDir reports whether the format's path is a directory rather than a
@@ -62,13 +63,13 @@ func (f importFormat) wantsDir() bool {
 func (f importFormat) pathHint() string {
 	switch f {
 	case formatYOLO:
-		return "选择 YOLO 数据集根目录（含 images/ 与 labels/）或 labels 目录；类别名取根目录的 data.yaml 或唯一 *.yaml"
+		return locales.WizardImportPathHintYOLO()
 	case formatCOCO:
-		return "选择 COCO 标注 JSON 文件"
+		return locales.WizardImportPathHintCOCO()
 	case formatVOC:
-		return "选择 VOC XML 目录"
+		return locales.WizardImportPathHintVOC()
 	case formatIR:
-		return "选择 IR 项目根目录（含 project.json）"
+		return locales.WizardImportPathHintIR()
 	}
 	return ""
 }
@@ -195,7 +196,7 @@ func (a *App) wizardParse() bool {
 func (a *App) wizardAutoLoad() bool {
 	w := &a.wiz
 	if strings.TrimSpace(w.Path) == "" {
-		w.Err = "请先选择路径"
+		w.Err = locales.WizardImportNeedPath()
 		return false
 	}
 	root := importImageRoot(w.Format, strings.TrimSpace(w.Path))
@@ -203,7 +204,7 @@ func (a *App) wizardAutoLoad() bool {
 	if len(a.images) == 0 {
 		// openDir leaves the real reason on the status bar (scan or store
 		// error); the path step gets the actionable summary.
-		w.Err = fmt.Sprintf("在 %s 下没有找到图片，请先打开图片文件夹或检查路径", root)
+		w.Err = locales.WizardImportNoImages(root)
 		return false
 	}
 	// An IR project imports itself while its folder opens (openir.go), so the
@@ -277,7 +278,7 @@ func (a *App) parseImport() (*importer.Dataset, []ir.Issue, error) {
 	w := &a.wiz
 	p := strings.TrimSpace(w.Path)
 	if p == "" {
-		return nil, nil, errors.New("请先选择路径")
+		return nil, nil, errors.New(locales.WizardImportNeedPath())
 	}
 	switch w.Format {
 	case formatYOLO:
@@ -297,7 +298,7 @@ func (a *App) parseImport() (*importer.Dataset, []ir.Issue, error) {
 	case formatIR:
 		return readIRDataset(p)
 	}
-	return nil, nil, fmt.Errorf("未知的导入格式")
+	return nil, nil, fmt.Errorf("%s", locales.ErrorUnknownImportFormat())
 }
 
 // readIRDataset reads an IR project as a Dataset: the project's category table
@@ -331,10 +332,7 @@ func (a *App) wizardApply() {
 
 	status := res.String()
 	if len(res.Warnings) > 0 {
-		status += "；" + res.Warnings[0]
-		if len(res.Warnings) > 1 {
-			status += fmt.Sprintf("（另有 %d 条警告）", len(res.Warnings)-1)
-		}
+		status = locales.WizardImportStatus(status, res.Warnings[0], len(res.Warnings)-1)
 	}
 	a.lastStatus = status
 }
@@ -361,30 +359,42 @@ func (a *App) mappingOptions(name string) []string {
 	return append(opts, newCatOption(name))
 }
 
+// reportLine is one painted line of the report step: its text and whether it
+// is an error, which colors it. The kind is carried, not read back off the
+// text, which is in the interface's language.
+type reportLine struct {
+	text  string
+	isErr bool
+}
+
 // issueLine renders one locatable issue for the report step.
-func issueLine(kind string, is ir.Issue) string {
+func issueLine(isErr bool, is ir.Issue) reportLine {
 	loc := is.File
 	if loc == "" {
-		loc = "数据集"
+		loc = locales.WizardImportLocDataset()
 	}
 	if is.Line > 0 {
-		loc = fmt.Sprintf("%s:%d", loc, is.Line)
+		loc = locales.WizardImportLocLine(loc, is.Line)
 	}
 	if is.Index >= 0 {
-		loc = fmt.Sprintf("%s 第 %d 条", loc, is.Index+1)
+		loc = locales.WizardImportLocIndex(loc, is.Index+1)
 	}
 	if is.Field != "" {
-		loc += " " + is.Field
+		loc = locales.WizardImportLocField(loc, is.Field)
 	}
-	return fmt.Sprintf("[%s] %s：%s", kind, loc, is.Message)
+	kind := locales.WizardImportKindWarning()
+	if isErr {
+		kind = locales.WizardImportKindError()
+	}
+	return reportLine{text: locales.WizardImportIssueLine(kind, loc, is.Message), isErr: isErr}
 }
 
 // reportIssues returns the issues of the report step in a stable order, errors
 // before warnings.
-func (w *wizardState) reportLines() []string {
-	lines := make([]string, 0, len(w.Issues)+len(w.Warnings))
+func (w *wizardState) reportLines() []reportLine {
+	lines := make([]reportLine, 0, len(w.Issues)+len(w.Warnings))
 	for _, is := range w.Issues {
-		lines = append(lines, issueLine("错误", is))
+		lines = append(lines, issueLine(true, is))
 	}
 	warns := append([]ir.Issue(nil), w.Warnings...)
 	sort.SliceStable(warns, func(i, j int) bool {
@@ -394,7 +404,7 @@ func (w *wizardState) reportLines() []string {
 		return warns[i].Line < warns[j].Line
 	})
 	for _, is := range warns {
-		lines = append(lines, issueLine("警告", is))
+		lines = append(lines, issueLine(false, is))
 	}
 	return lines
 }
@@ -408,11 +418,11 @@ func (a *App) browseImportPath() {
 	}
 	opts := mygo.OpenDialogOptions{
 		Parent:    a.win,
-		Title:     "选择" + a.wiz.Format.label() + " 标注来源",
+		Title:     locales.WizardImportBrowseTitle(a.wiz.Format.label()),
 		Directory: a.wiz.Format.wantsDir(),
 	}
 	if !a.wiz.Format.wantsDir() {
-		opts.Filters = []mygo.FileFilter{{Name: "标注文件", Extensions: []string{"json"}}}
+		opts.Filters = []mygo.FileFilter{{Name: locales.WizardImportBrowseFilter(), Extensions: []string{"json"}}}
 	}
 	paths, err := mygo.Dialog.Open(opts)
 	if err != nil || len(paths) == 0 {
@@ -429,8 +439,8 @@ func (a *App) importModal(c *ui.Context) {
 	ui.Modal(c, &w.Open, func() {
 		ui.Column(c).Width(760).Gap(10).Children(func() {
 			ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "导入标注").FontSize(14).Bold()
-				ui.Textf(c, "第 %d/4 步 · %s", int(w.Step)+1, w.Step.title()).FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, locales.WizardImportTitle()).FontSize(14).Bold()
+				ui.Text(c, locales.WizardImportStepCounter(int(w.Step)+1, w.Step.title())).FontSize(11).TextColor(t.TextMuted)
 			})
 			switch w.Step {
 			case wizStepFormat:
@@ -451,13 +461,13 @@ func (a *App) importModal(c *ui.Context) {
 func (s wizardStep) title() string {
 	switch s {
 	case wizStepFormat:
-		return "格式"
+		return locales.WizardImportStepFormat()
 	case wizStepPath:
-		return "路径"
+		return locales.WizardImportStepPath()
 	case wizStepMapping:
-		return "解析预览与类别映射"
+		return locales.WizardImportStepMapping()
 	case wizStepReport:
-		return "错误与警告"
+		return locales.WizardImportStepReport()
 	}
 	return ""
 }
@@ -467,21 +477,21 @@ func (s wizardStep) title() string {
 func (a *App) wizardFormatPage(c *ui.Context) {
 	w := &a.wiz
 	t := c.Theme()
-	ui.Text(c, "1. 选择来源格式").FontSize(12)
+	ui.Text(c, locales.WizardImportHeadingFormat()).FontSize(12)
 	ui.RadioGroup(c, func() {
 		for _, f := range importFormats {
 			ui.Radio(c, &w.Format, f, f.label())
 		}
-	}).Row().Gap(16).Label("导入格式")
+	}).Row().Gap(16).Label(locales.WizardImportFormatLabel())
 	if w.Format == formatYOLO {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "YOLO 任务").FontSize(11).TextColor(t.TextMuted)
-			ui.Select(c.Key("wizYoloTask"), &w.YoloTask, yoloTasks).Label("YOLO 任务")
-			ui.Text(c, "9 字段歧义（obb 还是 4 点 seg）由此裁决，auto 按首行字段数猜").FontSize(10).TextColor(t.TextMuted)
+			ui.Text(c, locales.WizardImportYoloTask()).FontSize(11).TextColor(t.TextMuted)
+			ui.Select(c.Key("wizYoloTask"), &w.YoloTask, yoloTasks).Label(locales.WizardImportYoloTask())
+			ui.Text(c, locales.WizardImportYoloAmbiguity()).FontSize(10).TextColor(t.TextMuted)
 		})
 	}
 	if w.Format == formatVOC {
-		ui.Checkbox(c.Key("wizVocOneBased"), &w.VOCOneBased, "bndbox 是 1-based（读取时减 1）").Label("VOC 1-based")
+		ui.Checkbox(c.Key("wizVocOneBased"), &w.VOCOneBased, locales.WizardImportVocOneBased()).Label(locales.WizardImportVocOneBasedLabel())
 	}
 }
 
@@ -490,19 +500,19 @@ func (a *App) wizardFormatPage(c *ui.Context) {
 func (a *App) wizardPathPage(c *ui.Context) {
 	w := &a.wiz
 	t := c.Theme()
-	ui.Text(c, "2. 选择路径").FontSize(12)
+	ui.Text(c, locales.WizardImportHeadingPath()).FontSize(12)
 	ui.Text(c, w.Format.pathHint()).FontSize(11).TextColor(t.TextMuted)
 	if a.dir == "" {
-		ui.Text(c, "未打开图片文件夹：将自动从数据集目录载入图片").FontSize(11).TextColor(t.TextMuted)
+		ui.Text(c, locales.WizardImportNoWorkspace()).FontSize(11).TextColor(t.TextMuted)
 	}
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.TextInput(c.Key("wizPath"), &w.Path).Grow(1).Label("导入路径")
-		if ui.Button(c.Key("wizBrowse"), "浏览…").Clicked() {
+		ui.TextInput(c.Key("wizPath"), &w.Path).Grow(1).Label(locales.WizardImportPathField())
+		if ui.Button(c.Key("wizBrowse"), locales.CommonBrowse()).Clicked() {
 			a.browseImportPath()
 		}
 	})
 	if w.Err != "" {
-		ui.Text(c, "解析失败："+w.Err).FontSize(11).TextColor(t.Danger)
+		ui.Text(c, locales.WizardImportParseFailed(w.Err)).FontSize(11).TextColor(t.Danger)
 	}
 }
 
@@ -512,12 +522,12 @@ func (a *App) wizardMappingPage(c *ui.Context) {
 	w := &a.wiz
 	t := c.Theme()
 	if w.DS == nil {
-		ui.Text(c, "没有解析结果").FontSize(12).TextColor(t.Danger)
+		ui.Text(c, locales.WizardImportNoParse()).FontSize(12).TextColor(t.Danger)
 		return
 	}
-	ui.Textf(c, "解析预览：%d 张图片 / %d 条标注；警告 %d 条，可定位错误 %d 条",
-		len(w.DS.Images), totalAnnots(w.DS), len(w.Warnings), len(w.Issues)).FontSize(12)
-	ui.Text(c, "类别映射：每个源类别选一个现有类别，或新建").FontSize(11).TextColor(t.TextMuted)
+	ui.Text(c, locales.WizardImportPreview(len(w.DS.Images), totalAnnots(w.DS),
+		len(w.Warnings), len(w.Issues))).FontSize(12)
+	ui.Text(c, locales.WizardImportMappingHint()).FontSize(11).TextColor(t.TextMuted)
 	ui.Divider(c)
 	ui.Scroll(c).Height(300).Children(func() {
 		ui.Column(c).Gap(4).Children(func() {
@@ -527,8 +537,8 @@ func (a *App) wizardMappingPage(c *ui.Context) {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					ui.Text(c, ch.Name).FontSize(12).Width(220).SingleLine().TruncateMiddle()
 					ui.Select(c.Key(fmt.Sprintf("wizMap%d", i)), &ch.Pick, opts).
-						Label("映射:" + ch.Key)
-					ui.Textf(c, "来源 %q", ch.Key).FontSize(10).TextColor(t.TextMuted)
+						Label(locales.WizardImportMapField(ch.Key))
+					ui.Text(c, locales.WizardImportSource(ch.Key)).FontSize(10).TextColor(t.TextMuted)
 				})
 			}
 		})
@@ -541,21 +551,20 @@ func (a *App) wizardMappingPage(c *ui.Context) {
 func (a *App) wizardReportPage(c *ui.Context) {
 	w := &a.wiz
 	t := c.Theme()
-	ui.Textf(c, "错误与警告：错误 %d 条，警告 %d 条；导入时错误条目会被跳过",
-		len(w.Issues), len(w.Warnings)).FontSize(12)
+	ui.Text(c, locales.WizardImportReportHeading(len(w.Issues), len(w.Warnings))).FontSize(12)
 	lines := w.reportLines()
 	ui.Scroll(c).Height(300).Children(func() {
 		ui.Column(c).Gap(2).Children(func() {
 			if len(lines) == 0 {
-				ui.Text(c, "没有错误或警告").FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, locales.WizardImportNoIssues()).FontSize(11).TextColor(t.TextMuted)
 				return
 			}
 			for _, line := range lines {
 				col := t.Warning
-				if strings.HasPrefix(line, "[错误]") {
+				if line.isErr {
 					col = t.Danger
 				}
-				ui.Text(c, line).FontSize(11).TextColor(col).SingleLine().TruncateMiddle()
+				ui.Text(c, line.text).FontSize(11).TextColor(col).SingleLine().TruncateMiddle()
 			}
 		})
 	})
@@ -566,18 +575,18 @@ func (a *App) wizardFooter(c *ui.Context) {
 	w := &a.wiz
 	ui.Row(c).Gap(8).Children(func() {
 		if w.Step > wizStepFormat {
-			if ui.Button(c.Key("wizBack"), "上一步").Clicked() {
+			if ui.Button(c.Key("wizBack"), locales.CommonBack()).Clicked() {
 				a.wizardBack()
 			}
 		}
 		if w.Step < wizStepReport {
-			if ui.Button(c.Key("wizNext"), "下一步").Clicked() {
+			if ui.Button(c.Key("wizNext"), locales.CommonNext()).Clicked() {
 				a.wizardNext()
 			}
-		} else if ui.PrimaryButton(c.Key("wizApply"), "导入正确部分").Clicked() {
+		} else if ui.PrimaryButton(c.Key("wizApply"), locales.WizardImportApply()).Clicked() {
 			a.wizardApply()
 		}
-		if ui.Button(c.Key("wizCancel"), "取消").Clicked() {
+		if ui.Button(c.Key("wizCancel"), locales.CommonCancel()).Clicked() {
 			a.closeImportWizard()
 		}
 	})

@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"mylabel/locales"
 )
 
 // testImage returns a w×h bitmap with a gradient pattern, built in memory so
@@ -80,9 +82,9 @@ func tester(t *testing.T) (*App, *ui.Tester) {
 // canvasBounds returns the canvas box in window DIPs.
 func canvasBounds(t *testing.T, tt *ui.Tester) ui.Rect {
 	t.Helper()
-	r, ok := tt.Find(canvasLabel)
+	r, ok := tt.Find(locales.HintCanvasName())
 	if !ok || r.W <= 0 || r.H <= 0 {
-		t.Fatalf("canvas %q not found: ok=%v rect=%+v texts=%v", canvasLabel, ok, r, tt.Texts())
+		t.Fatalf("canvas %q not found: ok=%v rect=%+v texts=%v", locales.HintCanvasName(), ok, r, tt.Texts())
 	}
 	return r
 }

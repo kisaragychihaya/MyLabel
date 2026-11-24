@@ -13,6 +13,8 @@ import (
 
 	_ "golang.org/x/image/bmp"  // image.Decode in newTiledImage
 	_ "golang.org/x/image/webp" // image.Decode in newTiledImage
+
+	"mylabel/locales"
 )
 
 const (
@@ -157,7 +159,7 @@ func (a *App) loadImage(i int) {
 	info := &a.images[i]
 	data, err := os.ReadFile(info.Path)
 	if err != nil {
-		a.lastStatus = "读取失败 " + info.Name + ": " + err.Error()
+		a.lastStatus = locales.StatusImageReadFailed(info.Name, err.Error())
 		return
 	}
 
@@ -176,7 +178,7 @@ func (a *App) loadImage(i int) {
 		w, h = bmp.Size()
 	}
 	if err != nil {
-		a.lastStatus = "解码失败 " + info.Name + ": " + err.Error()
+		a.lastStatus = locales.StatusImageDecodeFailed(info.Name, err.Error())
 		return
 	}
 	info.Width, info.Height = w, h

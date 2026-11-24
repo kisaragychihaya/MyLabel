@@ -13,10 +13,6 @@ const (
 	yoloLabelsDir = "labels"
 )
 
-// yoloRootNote prefixes the status line when the opened folder was widened to
-// the dataset root.
-const yoloRootNote = "检测到 YOLO 数据集布局，已改为打开数据集根，"
-
 // resolveOpenDir widens an Ultralytics dataset subfolder to the dataset root:
 // X/images/train and X/images both open as X, so train and val images end up in
 // one workspace and the importer can match every split against its labels. All

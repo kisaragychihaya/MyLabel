@@ -1,6 +1,10 @@
 package app
 
-import "fmt"
+import (
+	"fmt"
+
+	"mylabel/locales"
+)
 
 // Carry-over of the previous image's annotations (Ctrl+B,
 // docs/phase5-design.md §2).
@@ -15,7 +19,7 @@ func (a *App) carryPrevImage() bool {
 		return false
 	}
 	if a.loaded == 0 {
-		a.lastStatus = "没有上一张图片"
+		a.lastStatus = locales.StatusNoPreviousImage()
 		return false
 	}
 	// Same guard as Delete: a drag holds annotation snapshots by index.
@@ -24,7 +28,7 @@ func (a *App) carryPrevImage() bool {
 	}
 	src := a.images[a.loaded-1].Anns
 	if len(src) == 0 {
-		a.lastStatus = "上一张没有标注可沿用"
+		a.lastStatus = locales.StatusNoPreviousAnns()
 		return false
 	}
 	img := a.curImage()
@@ -52,7 +56,7 @@ func (a *App) carryPrevImage() bool {
 		a.selSet[base+i] = true
 	}
 	a.selPrimary = base + len(anns) - 1
-	a.lastStatus = fmt.Sprintf("已从上一张沿用 %d 条标注", len(anns))
+	a.lastStatus = locales.StatusCarriedAnns(len(anns))
 	return true
 }
 

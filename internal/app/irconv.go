@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"mylabel/internal/ir"
+	"mylabel/locales"
 )
 
 // IR exchange conversions (docs/phase3-design.md §4.1). The IR model lives in
@@ -118,7 +119,7 @@ func irCategoryToApp(c ir.Category) Category {
 		name = strings.TrimSpace(c.Key)
 	}
 	if name == "" {
-		name = "类别"
+		name = locales.CatPanelUnnamed()
 	}
 	out := Category{Name: name}
 	if col, ok := parseHexColor(strings.TrimSpace(c.Color)); ok {

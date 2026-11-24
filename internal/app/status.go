@@ -4,6 +4,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"mylabel/internal/store"
+	"mylabel/locales"
 )
 
 // normalizeStatus maps a stored status to the one the UI works with: a row
@@ -20,15 +21,15 @@ func normalizeStatus(status string) string {
 func statusLabel(status string) string {
 	switch normalizeStatus(status) {
 	case store.StatusNew:
-		return "新图"
+		return locales.StatusNewImage()
 	case store.StatusLabeling:
-		return "标注中"
+		return locales.StatusLabeling()
 	case store.StatusDone:
-		return "已完成"
+		return locales.StatusDone()
 	case store.StatusReviewed:
-		return "已复核"
+		return locales.StatusReviewed()
 	case store.StatusSkipped:
-		return "已跳过"
+		return locales.StatusSkipped()
 	}
 	return normalizeStatus(status)
 }
@@ -68,10 +69,10 @@ func (a *App) writeImageStatus(img int, status string) {
 	}
 	if err := a.store.SetImageStatus(info.ID, status); err != nil {
 		info.Status = prev
-		a.lastStatus = "写入状态失败: " + err.Error()
+		a.lastStatus = locales.StatusWriteStatusFailed(err.Error())
 		return
 	}
-	a.lastStatus = "状态: " + statusLabel(status)
+	a.lastStatus = locales.StatusStateWritten(statusLabel(status))
 }
 
 // toggleImageStatus flips the loaded image between done and new (Ctrl+D, §7).

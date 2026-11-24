@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"mylabel/locales"
 )
 
 // handleDroppedFiles opens whatever the user dropped on the window this
@@ -34,7 +36,7 @@ func (a *App) handleDroppedFiles(root ui.Element) {
 		}
 	}
 	if len(images) == 0 {
-		a.lastStatus = "拖入的内容不是图片或文件夹"
+		a.lastStatus = locales.StatusDropUnsupported()
 		return
 	}
 
