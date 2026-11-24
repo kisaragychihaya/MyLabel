@@ -24,10 +24,15 @@ var (
 	iconToolPan = toolIcon(`<path d="M9 12V6.5a1.5 1.5 0 0 1 3 0V11"/>` +
 		`<path d="M12 11V5.5a1.5 1.5 0 0 1 3 0V11"/>` +
 		`<path d="M15 11.5V8a1.5 1.5 0 0 1 3 0v7.5a5 5 0 0 1-5 5h-1.5a5 5 0 0 1-5-5V12a1.5 1.5 0 0 1 3 0"/>`)
-	// iconToolZoom is a magnifier holding a plus.
-	iconToolZoom = toolIcon(`<circle cx="10.5" cy="10.5" r="6.5"/>` +
+	// iconToolZoomIn is a magnifier holding a plus: the zoom tool's first
+	// direction, and iconToolZoomOut's sibling.
+	iconToolZoomIn = toolIcon(`<circle cx="10.5" cy="10.5" r="6.5"/>` +
 		`<path d="M15.4 15.4 21 21"/>` +
 		`<path d="M10.5 7.5v6M7.5 10.5h6"/>`)
+	// iconToolZoomOut is the same magnifier holding a minus.
+	iconToolZoomOut = toolIcon(`<circle cx="10.5" cy="10.5" r="6.5"/>` +
+		`<path d="M15.4 15.4 21 21"/>` +
+		`<path d="M7.5 10.5h6"/>`)
 	// iconToolMarquee is a dashed box: the region a drag marks out.
 	iconToolMarquee = toolIcon(`<rect x="3" y="5" width="18" height="14" rx="2" stroke-dasharray="3 3"/>`)
 	// iconToolRect is a plain box.

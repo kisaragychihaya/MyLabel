@@ -64,33 +64,64 @@ func TestPanToolDragsView(t *testing.T) {
 	}
 }
 
-// TestZoomToolClick: a click zooms one step in around the pressed point, Alt
-// zooms one step out, the image point under the pointer stays under it, and a
-// press that travels zooms nothing.
-func TestZoomToolClick(t *testing.T) {
+// TestZoomToolAlternates: the zoom tool's clicks alternate in and out around the
+// pressed point, the image point under the pointer stays under it, Alt forces the
+// other direction and still flips the pair, a tool switch starts the tool over
+// with a zoom in, and a press that travels zooms nothing.
+func TestZoomToolAlternates(t *testing.T) {
 	a := threeRects(t)
 	a.zoom, a.panX, a.panY = 1, 0, 0
 	a.setTool(ToolZoom)
+	if a.zoomOutNext {
+		t.Fatalf("切到缩放工具后 zoomOutNext = true，期望先放大")
+	}
 
 	// The center of the second box: the tool must zoom there, not select it.
 	x, y := localOf(a, Point{X: 300, Y: 100})
-	localClick(a, x, y, 0)
+	anchor := func(step string) {
+		t.Helper()
+		if p := a.pointerImage(x, y); !nearly(p.X, 300, 1e-6) || !nearly(p.Y, 100, 1e-6) {
+			t.Errorf("%s：指针下的图像点是 %+v，期望 (300,100)：锚点漂移了", step, p)
+		}
+	}
 
-	if !nearly(a.zoom, zoomStep, 1e-9) {
-		t.Fatalf("单击后 zoom = %v，期望 %v", a.zoom, zoomStep)
+	// First click: in, and the next one is out.
+	localClick(a, x, y, 0)
+	if !nearly(a.zoom, zoomStep, 1e-9) || !a.zoomOutNext {
+		t.Fatalf("第 1 次单击后 zoom = %v，zoomOutNext = %v，期望 %v 与 true", a.zoom, a.zoomOutNext, zoomStep)
 	}
-	if p := a.pointerImage(x, y); !nearly(p.X, 300, 1e-6) || !nearly(p.Y, 100, 1e-6) {
-		t.Errorf("缩放后指针下的图像点是 %+v，期望 (300,100)：锚点漂移了", p)
-	}
+	anchor("放大后")
 	wantSelection(t, a)
 
-	// Alt is the other direction, around the same point.
-	localClick(a, x, y, ui.Alt)
-	if !nearly(a.zoom, 1, 1e-9) {
-		t.Fatalf("Alt+单击后 zoom = %v，期望回到 1", a.zoom)
+	// Second click: out, back to 1, and the pair flips again.
+	localClick(a, x, y, 0)
+	if !nearly(a.zoom, 1, 1e-9) || a.zoomOutNext {
+		t.Fatalf("第 2 次单击后 zoom = %v，zoomOutNext = %v，期望 1 与 false", a.zoom, a.zoomOutNext)
 	}
-	if p := a.pointerImage(x, y); !nearly(p.X, 300, 1e-6) || !nearly(p.Y, 100, 1e-6) {
-		t.Errorf("缩小后指针下的图像点是 %+v，期望 (300,100)", p)
+	anchor("缩小后")
+
+	// Third click: in again.
+	localClick(a, x, y, 0)
+	if !nearly(a.zoom, zoomStep, 1e-9) || !a.zoomOutNext {
+		t.Fatalf("第 3 次单击后 zoom = %v，zoomOutNext = %v，期望 %v 与 true", a.zoom, a.zoomOutNext, zoomStep)
+	}
+
+	// Alt forces the opposite of the direction the click would have taken —
+	// zooming in while the pair says out — and still flips it.
+	a.zoom, a.panX, a.panY = 1, 0, 0
+	a.zoomOutNext = true
+	localClick(a, x, y, ui.Alt)
+	if !nearly(a.zoom, zoomStep, 1e-9) || a.zoomOutNext {
+		t.Fatalf("Alt+单击后 zoom = %v，zoomOutNext = %v，期望 %v 与 false", a.zoom, a.zoomOutNext, zoomStep)
+	}
+	anchor("Alt 放大后")
+
+	// Leaving the tool and coming back starts it over with a zoom in.
+	a.zoomOutNext = true
+	a.setTool(ToolRect)
+	a.setTool(ToolZoom)
+	if a.zoomOutNext {
+		t.Errorf("回到缩放工具后 zoomOutNext = true，期望重置为放大")
 	}
 
 	// A press that travelled is a drag, and dragging zooms nothing.

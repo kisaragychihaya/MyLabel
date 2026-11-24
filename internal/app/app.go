@@ -94,10 +94,14 @@ type App struct {
 
 	// interaction state machine
 	mode     Mode
-	tool     Tool // annotation tool: rectangles or polygons (docs/phase2-design.md §4.1)
+	tool     Tool // the tool the strip selects: annotation or view (docs/phase6-design.md §1)
 	draft    Ann  // rubber-band preview while ModeCreating; category/ID of a polygon draft
 	drag     dragState
 	spacePan bool // Space held: left-drag pans instead of creating (labelme-style)
+	// zoomOutNext is the zoom tool's direction: the next click zooms out instead
+	// of in, alternating click by click, and the magnifier's icon shows it
+	// (docs/phase6-design.md §3).
+	zoomOutNext bool
 
 	// Click-by-click draft in progress (ModePolyCreate): the vertices clicked so
 	// far, in image pixels — a polygon's, or the four corners of a rotated box

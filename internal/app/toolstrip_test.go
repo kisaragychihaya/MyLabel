@@ -71,6 +71,29 @@ func accentish(theme *ui.Theme, c color.RGBA) bool {
 	return false
 }
 
+// toolIcons returns every drawing the strip can show, by label: each tool's icon
+// in the state it starts in, plus the zoom tool's other direction.
+func toolIcons() []struct {
+	label string
+	svg   *ui.SVG
+} {
+	var zero App
+	out := make([]struct {
+		label string
+		svg   *ui.SVG
+	}, 0, len(toolSpecs)+1)
+	for _, spec := range toolSpecs {
+		out = append(out, struct {
+			label string
+			svg   *ui.SVG
+		}{spec.key, spec.icon(&zero)})
+	}
+	return append(out, struct {
+		label string
+		svg   *ui.SVG
+	}{"toolZoomOut", iconToolZoomOut})
+}
+
 // TestToolIconsParse: every tool has its own 24×24 outline, and none of them
 // carries an SVG feature the renderer would have to skip.
 func TestToolIconsParse(t *testing.T) {
@@ -78,20 +101,20 @@ func TestToolIconsParse(t *testing.T) {
 		t.Fatalf("工具条有 %d 个工具，期望 6 个", len(toolSpecs))
 	}
 	seen := map[*ui.SVG]string{}
-	for _, spec := range toolSpecs {
-		if spec.icon == nil {
-			t.Fatalf("%s 没有图标", spec.key)
+	for _, icon := range toolIcons() {
+		if icon.svg == nil {
+			t.Fatalf("%s 没有图标", icon.label)
 		}
-		if w, h := spec.icon.Size(); w != 24 || h != 24 {
-			t.Errorf("%s: 图标 %v×%v，期望 24×24", spec.key, w, h)
+		if w, h := icon.svg.Size(); w != 24 || h != 24 {
+			t.Errorf("%s: 图标 %v×%v，期望 24×24", icon.label, w, h)
 		}
-		if un := spec.icon.Unsupported(); len(un) > 0 {
-			t.Errorf("%s: 图标含不支持的 SVG 特性 %v", spec.key, un)
+		if un := icon.svg.Unsupported(); len(un) > 0 {
+			t.Errorf("%s: 图标含不支持的 SVG 特性 %v", icon.label, un)
 		}
-		if other, dup := seen[spec.icon]; dup {
-			t.Errorf("%s 与 %s 用了同一个图标", spec.key, other)
+		if other, dup := seen[icon.svg]; dup {
+			t.Errorf("%s 与 %s 用了同一个图标", icon.label, other)
 		}
-		seen[spec.icon] = spec.key
+		seen[icon.svg] = icon.label
 	}
 }
 
@@ -99,21 +122,22 @@ func TestToolIconsParse(t *testing.T) {
 // theme's text color — a parsed-but-empty icon would paint the background only.
 func TestToolIconsPaint(t *testing.T) {
 	var theme ui.Theme
+	icons := toolIcons()
 	tt := ui.NewTester(func(c *ui.Context) {
 		theme = *c.Theme()
 		ui.Column(c).Fill().Background(theme.Background).Padding(8).Gap(8).Children(func() {
-			for _, spec := range toolSpecs {
-				ui.Box(c).Size(24, 24).Label(spec.key).Children(func() {
-					ui.Icon(c, spec.icon).FontSize(24)
+			for _, icon := range icons {
+				ui.Box(c).Size(24, 24).Label(icon.label).Children(func() {
+					ui.Icon(c, icon.svg).FontSize(24)
 				})
 			}
 		})
 	}, 200, 400)
 
-	for _, spec := range toolSpecs {
-		r, ok := tt.Find(spec.key)
+	for _, icon := range icons {
+		r, ok := tt.Find(icon.label)
 		if !ok {
-			t.Fatalf("图标 %s 未找到", spec.key)
+			t.Fatalf("图标 %s 未找到", icon.label)
 		}
 		ink := 0
 		for y := int(r.Y); y < int(r.Y+r.H); y++ {
@@ -124,7 +148,7 @@ func TestToolIconsPaint(t *testing.T) {
 			}
 		}
 		if ink < 8 {
-			t.Errorf("图标 %s 只画出 %d 个非背景像素，%+v 内应是一条可见的轮廓", spec.key, ink, r)
+			t.Errorf("图标 %s 只画出 %d 个非背景像素，%+v 内应是一条可见的轮廓", icon.label, ink, r)
 		}
 	}
 }
@@ -181,6 +205,120 @@ func TestToolStripLayout(t *testing.T) {
 			t.Errorf("%s: 按钮面色 %v，accent %v，active 应为 %v", toolSpecs[i].key, got, theme.Accent, want)
 		}
 	}
+
+	// The icon sits in the middle of its square, not pushed to a side: a
+	// highlighted button's face blends into the strip's surface along its rounded
+	// corners, and those edge pixels read as ink, so this frame clears the
+	// highlight and measures only the drawing.
+	a.tool = Tool(-1) // no button active
+	tt.Frame()
+	frame = tt.Image()
+	for i, r := range rects {
+		ink, ok := inkBounds(frame, r, theme.Surface)
+		if !ok {
+			t.Fatalf("%s: %+v 内没有画出图标", toolSpecs[i].key, r)
+		}
+		cx, cy := ink.X+ink.W/2, ink.Y+ink.H/2
+		if dx, dy := math.Abs(float64(cx-(r.X+r.W/2))), math.Abs(float64(cy-(r.Y+r.H/2))); dx > 1 || dy > 1 {
+			t.Errorf("%s: 图标中心 (%v,%v)，按钮中心 (%v,%v)，偏移 (%v,%v) 超过 1 DIP",
+				toolSpecs[i].key, cx, cy, r.X+r.W/2, r.Y+r.H/2, dx, dy)
+		}
+	}
+}
+
+// inkBounds returns the box of the pixels inside a button that are neither its
+// face nor the theme's background: the icon it draws, in window DIPs. The scan
+// keeps inset DIP off the edges, which skips the button's border and the arc of
+// its rounded corners (the arc reaches in by radius*(1-1/√2) at most, under 3
+// DIP for a 32 DIP square) while still covering the icon around the middle.
+func inkBounds(frame *image.RGBA, r ui.Rect, face ui.Color) (ui.Rect, bool) {
+	const inset = 4
+	minX, minY := float32(math.MaxFloat32), float32(math.MaxFloat32)
+	maxX, maxY := -minX, -minY
+	for y := int(r.Y + inset); y < int(r.Y+r.H-inset); y++ {
+		for x := int(r.X + inset); x < int(r.X+r.W-inset); x++ {
+			c := frame.RGBAAt(x, y)
+			if closeColor(c, face, 10) {
+				continue
+			}
+			minX, maxX = min(minX, float32(x)), max(maxX, float32(x))
+			minY, maxY = min(minY, float32(y)), max(maxY, float32(y))
+		}
+	}
+	if maxX < minX {
+		return ui.Rect{}, false
+	}
+	return ui.Rect{X: minX, Y: minY, W: maxX - minX, H: maxY - minY}, true
+}
+
+// TestToolStripZoomIcon: the zoom tool's button shows the magnifier with a plus
+// while its next click zooms in, and the one with a minus while it zooms out;
+// its name and tooltip stay the same either way.
+func TestToolStripZoomIcon(t *testing.T) {
+	var zero App
+	zoom := -1
+	for i, spec := range toolSpecs {
+		if spec.tool == ToolZoom {
+			zoom = i
+		}
+	}
+	if zoom < 0 {
+		t.Fatalf("工具条里没有缩放工具")
+	}
+	spec := toolSpecs[zoom]
+	if iconToolZoomIn == iconToolZoomOut {
+		t.Fatalf("放大与缩小的图标是同一个 SVG")
+	}
+	if got := spec.icon(&zero); got != iconToolZoomIn {
+		t.Errorf("zoomOutNext = false 时图标不是放大镜+（%p），而是 %p", iconToolZoomIn, got)
+	}
+	if got := spec.icon(&App{zoomOutNext: true}); got != iconToolZoomOut {
+		t.Errorf("zoomOutNext = true 时图标不是放大镜−（%p），而是 %p", iconToolZoomOut, got)
+	}
+
+	// The button is named the same in both states: only the drawing changes.
+	a, tt, _ := stripRig(t)
+	a.setTool(ToolZoom)
+	rects := stripRects(t, tt)
+	r := rects[zoom]
+	tt.Frame()
+	plus := block(tt.Image(), r)
+	a.zoomOutNext = true
+	tt.Frame()
+	minus := block(tt.Image(), r)
+	if changed := countChanged(plus, minus); changed < 5 {
+		t.Errorf("方向翻转后按钮只变了 %d 个像素，期望放大镜+/− 明显不同", changed)
+	}
+	if got := spec.text(); got != locales.ToolStripZoom() {
+		t.Errorf("缩放按钮的文案 %q，期望 %q", got, locales.ToolStripZoom())
+	}
+}
+
+// block returns the pixels inside a button, off its border and rounded corners,
+// row by row.
+func block(frame *image.RGBA, r ui.Rect) []color.RGBA {
+	const inset = 2
+	out := make([]color.RGBA, 0, 28*28)
+	for y := int(r.Y + inset); y < int(r.Y+r.H-inset); y++ {
+		for x := int(r.X + inset); x < int(r.X+r.W-inset); x++ {
+			out = append(out, frame.RGBAAt(x, y))
+		}
+	}
+	return out
+}
+
+// countChanged counts the pixels that differ between two blocks of one size.
+func countChanged(a, b []color.RGBA) int {
+	n := 0
+	for i := range a {
+		if i >= len(b) {
+			break
+		}
+		if a[i] != b[i] {
+			n++
+		}
+	}
+	return n
 }
 
 // TestToolStripButtons: clicking a button activates its tool, and the highlight

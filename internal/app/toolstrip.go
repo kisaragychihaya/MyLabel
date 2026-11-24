@@ -24,24 +24,39 @@ const (
 	toolStripDividerAfter = 3
 )
 
-// toolSpec is one button of the strip. text returns the button's accessible
-// name and its tooltip, "名称 (快捷键)", read per frame: a package-level string
-// would freeze the language the app started in.
+// toolSpec is one button of the strip. text returns the button's accessible name
+// and its tooltip, "名称 (快捷键)", and icon the drawing it shows, both read per
+// frame: a package-level string would freeze the language the app started in,
+// and the zoom tool's icon follows its direction (zoomOutNext).
 type toolSpec struct {
 	tool Tool
 	key  string
-	icon *ui.SVG
+	icon func(a *App) *ui.SVG
 	text func() string
+}
+
+// fixedIcon is a toolSpec icon that does not depend on the app's state.
+func fixedIcon(svg *ui.SVG) func(*App) *ui.SVG {
+	return func(*App) *ui.SVG { return svg }
+}
+
+// zoomToolIcon is the zoom tool's button: a magnifier with a plus while the next
+// click zooms in, with a minus while it zooms out (docs/phase6-design.md §3).
+func zoomToolIcon(a *App) *ui.SVG {
+	if a.zoomOutNext {
+		return iconToolZoomOut
+	}
+	return iconToolZoomIn
 }
 
 // toolSpecs lists the strip's buttons from top to bottom.
 var toolSpecs = []toolSpec{
-	{ToolPan, "toolPan", iconToolPan, locales.ToolStripPan},
-	{ToolZoom, "toolZoom", iconToolZoom, locales.ToolStripZoom},
-	{ToolMarquee, "toolMarquee", iconToolMarquee, locales.ToolStripMarquee},
-	{ToolRect, "toolRect", iconToolRect, locales.ToolStripRect},
-	{ToolPoly, "toolPoly", iconToolPoly, locales.ToolStripPoly},
-	{ToolObb, "toolObb", iconToolObb, locales.ToolStripObb},
+	{ToolPan, "toolPan", fixedIcon(iconToolPan), locales.ToolStripPan},
+	{ToolZoom, "toolZoom", zoomToolIcon, locales.ToolStripZoom},
+	{ToolMarquee, "toolMarquee", fixedIcon(iconToolMarquee), locales.ToolStripMarquee},
+	{ToolRect, "toolRect", fixedIcon(iconToolRect), locales.ToolStripRect},
+	{ToolPoly, "toolPoly", fixedIcon(iconToolPoly), locales.ToolStripPoly},
+	{ToolObb, "toolObb", fixedIcon(iconToolObb), locales.ToolStripObb},
 }
 
 // toolStrip builds the left tool strip. Only its own column is painted here; the
@@ -72,9 +87,13 @@ func (a *App) toolStripButton(c *ui.Context, spec toolSpec) {
 	} else {
 		btn = ui.Button(c.Key(spec.key), "")
 	}
-	btn = btn.Label(name).Tooltip(name).Size(toolButtonDIP, toolButtonDIP)
+	// The theme pads a button for a text label, which on a 32 DIP square leaves
+	// its row narrower than the 18 DIP icon and pushes the drawing off center:
+	// a square icon button drops the padding and centers the icon in both
+	// directions instead (docs-zh/ui/button.md, docs-zh/ui/layout.md).
+	btn = btn.Label(name).Tooltip(name).Padding(0).Center().Size(toolButtonDIP, toolButtonDIP)
 	btn.Children(func() {
-		ui.Icon(c, spec.icon).FontSize(toolIconDIP)
+		ui.Icon(c, spec.icon(a)).FontSize(toolIconDIP)
 	})
 	if btn.Clicked() {
 		a.setTool(spec.tool)

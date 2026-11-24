@@ -578,9 +578,12 @@ func (a *App) zoomAround(cursor Point, factor float64) {
 const zoomStep = 1.25
 
 // zoomAtClick zooms one step around the press point of the zoom tool, so the
-// image point under the pointer stays under it. A press that travelled is a
-// drag, which this phase does not define: it zooms nothing (docs/phase6-design
-// §3, the same click slop a double-click uses).
+// image point under the pointer stays under it. Clicks alternate: one zooms in
+// and the next one out, and the magnifier's icon shows which comes next. Alt
+// forces the opposite direction and still flips the alternation, so a click with
+// Alt reads as one click of the pair. A press that travelled is a drag, which
+// this phase does not define: it zooms nothing (docs/phase6-design.md §3, the
+// same click slop a double-click uses).
 func (a *App) zoomAtClick(ev ui.InputEvent) {
 	// ModeZoomClick keeps the press in canvas DIP, as ModePan does, so the slop
 	// is measured on screen whatever the zoom.
@@ -588,8 +591,12 @@ func (a *App) zoomAtClick(ev ui.InputEvent) {
 	if distance(at, a.drag.start) > dblClickSlopDIP {
 		return
 	}
+	out := a.zoomOutNext != (ev.Mods&ui.Alt != 0)
+	// Every click flips the pair, the Alt one included: the direction an Alt
+	// click forced is the one the next plain click takes.
+	a.zoomOutNext = !a.zoomOutNext
 	factor := zoomStep
-	if ev.Mods&ui.Alt != 0 {
+	if out {
 		factor = 1 / zoomStep
 	}
 	a.zoomAround(at, factor)
@@ -846,6 +853,13 @@ func (a *App) setTool(t Tool) {
 	// canvas left mid-draft must not hand that draft to another tool.
 	a.cancelPolyDraft()
 	a.tool = t
+	// Coming to the zoom tool starts it over in its first direction: the
+	// magnifier shows the plus and the next click zooms in. The reset is done on
+	// the way in rather than on the way out, so that nothing a tool switch does
+	// after leaving the zoom tool can undo it.
+	if t == ToolZoom {
+		a.zoomOutNext = false
+	}
 }
 
 // startPolyDraft begins a click-by-click draft at image point p: ToolPoly's
