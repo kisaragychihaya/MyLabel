@@ -52,6 +52,8 @@ internal/app/           全部应用代码（单包）
   openir.go             openDir 时根下 project.json 的直接导入（优先于遗留 JSON，库中已有标注则跳过）
   nav.go                A/D 图片导航（goImage 只设 selImg，加载交给 thumbStrip 调和）+ F 适应窗口（fitWindow 置 fitOnLoad）
   carry.go              Ctrl+B 沿用上一张标注（carryPrevImage 深拷贝+换 ID+整批选中，cmdCarry 一条 undo）
+  toolstrip.go          左侧 Photoshop 式工具条（toolstripWidth 44）：toolSpecs 一行一工具（新工具加一行即可），图标按钮 + Label/Tooltip，视图类与创建类之间 Divider
+  icons.go              六个手写 24×24 stroke SVG（currentColor，ui.MustParseSVG）
   opendir.go            resolveOpenDir：Ultralytics 布局 X/images/train 或 X/images 自动上提到数据集根 X（需同级 labels/），不递归上提
   attributes.go         标注属性面板：双击单选标注打开，暂存类别+属性键值对，确定一次性提交为一条 undo
   annmenu.go            作用于单条标注的两个菜单（App 字段 catPick/zMenu，按 Image+ID 认人）：双击 chip = 类别单选列表（点一行即应用，一条 cmdModify）；右键标注 = z 序菜单（上移一层/下移一层/移到顶部/移到底部，一条 cmdReorder，到顶/到底的项 Disabled），面板用 ui.Popover + ui.Button
@@ -95,7 +97,7 @@ docs/phase5-design.md   阶段 5（导航/沿用/视觉回归/导出三遗留/i1
 
 ## 交互约定（labelme 风格，改动需保持）
 
-Space+左键拖拽 = 抓手平移；滚轮 = 垂直平移；Shift+滚轮 = 水平平移；Ctrl+滚轮 = 缩放；中键拖拽 = 平移；左键空白拖拽 = 创建框（ToolRect）或加点（ToolPoly/ToolObb）（空类别表下三种工具都不开草稿，提示「请先在右侧面板添加类别」）；R/P/O = 切换矩形/多边形/旋转框工具；旋转框 = 点 4 个角成框（第 4 点即成，Esc 取消、Backspace 删点）；多边形：单击加点、点首顶点/回车/双击闭合（≥3 点）、Esc 取消、Backspace 删末点、拖顶点编辑、Ctrl+点删顶点、双击边插顶点、拖内部整体移动；双击单选标注（rect 任意处、poly 内部）= 属性面板；类别名 chip = 独立控件，优先于其下标注的一切（单选 = 选中该条、双击 = 类别单选列表弹窗，点一行立即改类别并关闭，Esc/取消不改；标签隐藏或 >500 条未选中时不参与命中）；右键标注 = z 序菜单（上移一层/下移一层/移到顶部/移到底部 各一条 undo，已到顶/到底的项置灰；手势或草稿进行中右键无反应，点空白处不弹，点外面/Esc 关闭且不选中、不建草稿）；Ctrl+点击 = 多选切换；Shift+空白拖拽 = 框选；Ctrl+A = 全选；Delete/1-9 作用于全部选中（各一条批量 undo）；拖任一选中项 = 整组平移；resize/旋转/顶点编辑仅单选可用；Esc = 先取消手势再清空选择；Ctrl+D = 标记当前图 done/new；Ctrl+S/Z/Shift+Z = 保存/撤销/重做；A/D = 上一张/下一张（无修饰键才生效，越界不循环只在状态栏提示；拖动手势中拒绝）；Ctrl+B = 沿用上一张标注（深拷贝追加+整批选中，一条 undo）；F = 重新适应窗口居中（无修饰键）；L 或工具栏「标签」= 显示/隐藏类别名 chip（默认显示）。加载图片后自动"适应窗口居中"并把键盘焦点移到画布。
+左侧工具条（Photoshop 式，单一激活工具）：抓手 (H) = 左键任意处平移不选中、缩放 (Z) = 单击锚点放大 1.25×/Alt+单击缩小（位移超阈值视为误拖不缩放）、选框 (M) = 左键拖拽框选（起点在标注上也进 marquee，原位单击清空选择）、矩形 (R)/多边形 (P)/旋转框 (O) 创建工具；切工具丢弃进行中草稿/橡皮筋，拖动手势中不切；Space+左键拖拽 = 抓手平移（任意工具下）；滚轮 = 垂直平移；Shift+滚轮 = 水平平移；Ctrl+滚轮 = 缩放；中键拖拽 = 平移；Shift+空白拖拽 = 框选（任意工具下，视图工具让位）；左键空白拖拽 = 创建框（ToolRect）或加点（ToolPoly/ToolObb）（空类别表下三种工具都不开草稿，提示「请先在右侧面板添加类别」）；chip 单选/双击类别列表与右键 z 序菜单在六个工具下都可用；旋转框 = 点 4 个角成框（第 4 点即成，Esc 取消、Backspace 删点）；多边形：单击加点、点首顶点/回车/双击闭合（≥3 点）、Esc 取消、Backspace 删末点、拖顶点编辑、Ctrl+点删顶点、双击边插顶点、拖内部整体移动；双击单选标注（rect 任意处、poly 内部）= 属性面板；类别名 chip = 独立控件，优先于其下标注的一切（单选 = 选中该条、双击 = 类别单选列表弹窗，点一行立即改类别并关闭，Esc/取消不改；标签隐藏或 >500 条未选中时不参与命中）；右键标注 = z 序菜单（上移一层/下移一层/移到顶部/移到底部 各一条 undo，已到顶/到底的项置灰；手势或草稿进行中右键无反应，点空白处不弹，点外面/Esc 关闭且不选中、不建草稿）；Ctrl+点击 = 多选切换；Shift+空白拖拽 = 框选；Ctrl+A = 全选；Delete/1-9 作用于全部选中（各一条批量 undo）；拖任一选中项 = 整组平移；resize/旋转/顶点编辑仅单选可用；Esc = 先取消手势再清空选择；Ctrl+D = 标记当前图 done/new；Ctrl+S/Z/Shift+Z = 保存/撤销/重做；A/D = 上一张/下一张（无修饰键才生效，越界不循环只在状态栏提示；拖动手势中拒绝）；Ctrl+B = 沿用上一张标注（深拷贝追加+整批选中，一条 undo）；F = 重新适应窗口居中（无修饰键）；L 或工具栏「标签」= 显示/隐藏类别名 chip（默认显示）。加载图片后自动"适应窗口居中"并把键盘焦点移到画布。
 
 ## 测试约定
 
@@ -117,6 +119,7 @@ Space+左键拖拽 = 抓手平移；滚轮 = 垂直平移；Shift+滚轮 = 水�
 - 标注属性是自由文本键值对（schema v4 的 `annotations.attrs`）：没有类型、没有枚举、没有按属性筛选；改类别与改属性经属性面板一次性提交为一条 undo，面板里的类别选择在"确定"前不落库
 - 目录扫描已递归（`imaging.Scan`），但无文件监视；`exportJSON` 仍用 Remove+Rename（Windows 无原子覆盖，PoC 接受）
 - 遗留 JSON 只在"库中所有图片都没有标注"时自动迁移一次，且不删旧文件；匹配按裸文件名或唯一 base 名；PoC 文档的 ann ID 跨会话复用，导入时按图去重（`ensureUniqueAnnIDs`），加载后 `seedAnnIDCounter` 防止新 ID 撞车
+- 缩放工具只有单击/Alt+单击（无 scrubby-drag 与框选放大）；工具条不可自定义
 - 5000+ 标注时 CPU 光栅掩码图集是瓶颈（真机 GPU 无此问题）
 - UI 文案走 `locales/` 消息目录（zh-Hans 源 + en）；store/importer/exporter/ir/imaging 的 error 字符串保持中文（经 err.Error() 进 UI），属刻意范围外
 - 万级图片与 >8000px 大图已压测（阶段 5 W5，无窗口 headless 计时）：10000 张 640×480 openDir（扫描+EXIF+sha256+SQLite 同步）≈2.3s，单张 640×480 loadImage ≈2-3ms；8192×8192 分块大图 loadImage ≈1.1s。缩略图条万级滚动的主观流畅度与 GUI 内大图缩放/平移未自动化，需人工抽查
