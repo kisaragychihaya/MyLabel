@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -98,6 +99,7 @@ type exportState struct {
 	Task         exporter.Task // YOLO only
 	VOCOneBased  bool          // VOC only, default true
 	VOCDowngrade bool          // VOC only, default false
+	VOCSeg       bool          // VOC only, default true (docs/phase5-design.md §6)
 
 	// step 2
 	SplitMode exporter.SplitMode
@@ -107,6 +109,10 @@ type exportState struct {
 	// step 3
 	Plan *exporter.Plan
 	Err  string // option or BuildPlan error, shown on the page that produced it
+	// Overrides forces individual images (keyed by image file) into a split on
+	// top of SplitMode. A key that agrees with the automatic assignment is never
+	// kept, so an empty map is the automatic split (§7.2).
+	Overrides map[string]string
 
 	// step 4
 	Parent  string // folder the export goes into
@@ -118,6 +124,27 @@ type exportState struct {
 	OutPath string // where it landed
 	Written int    // progress numerator: files written
 	Total   int    // progress denominator: copies + files + manifest
+	// Cancel stops the running WriteExport. It is set when a run starts and
+	// cleared when the run is cancelled or finishes, so nil means "nothing to
+	// cancel" (§5.2).
+	Cancel context.CancelFunc
+
+	// The per-image dialog (§7.2): its open flag, its filter, and what it needs to
+	// draw a row, none of which is shown anywhere else.
+	Adjust       bool
+	AdjustFilter string
+
+	// adjustAuto is the split policy's own answer, built without Overrides: Plan
+	// already holds the overridden result, so the dialog needs this to tell a
+	// choice from the automatic value it falls back to.
+	adjustAuto map[string]string
+	// adjustFiles is the sorted, filtered view of adjustAuto's keys. Rows are
+	// rebuilt from state, not kept on elements, because a virtualized list
+	// recycles them (design rule 4).
+	adjustFiles  []string
+	adjustFilter string            // the filter adjustFiles was built from
+	adjustBase   map[string]string // Overrides when the dialog opened; nil while it is closed
+	adjustList   ui.ListState
 }
 
 // openExportWizard opens the wizard at its first step, dropping any previous
@@ -134,6 +161,7 @@ func (a *App) openExportWizard() {
 		Format:      exporter.FormatYOLO,
 		Task:        a.inferExportTask(),
 		VOCOneBased: true,
+		VOCSeg:      true, // masks are the user-facing default (§6)
 		SplitMode:   exporter.SplitPreserve,
 		Ratio:       defaultExportRatio,
 		Seed:        defaultExportSeed,
@@ -144,12 +172,18 @@ func (a *App) openExportWizard() {
 	}
 }
 
-// closeExportWizard closes the dialog and forgets the run. A background export
-// keeps running: exporter.WriteExport accepts a ctx, but the wizard does not
-// cancel it yet (docs/phase5-design.md §5.2).
+// closeExportWizard closes the dialog and stops a running export: a background
+// write whose dialog is gone would never be seen again, so the run is cancelled
+// first (docs/phase5-design.md §5.2). The state stays until finishExport has
+// recorded the outcome, which is why the busy path only hides the dialog.
 func (a *App) closeExportWizard() {
-	if a.ex.Busy {
-		a.ex.Open = false
+	s := &a.ex
+	if s.Cancel != nil {
+		s.Cancel()
+		s.Cancel = nil
+	}
+	if s.Busy {
+		s.Open = false
 		return
 	}
 	a.ex = exportState{}
@@ -197,9 +231,13 @@ func (s *exportState) options() (exporter.Options, error) {
 		Split:           exporter.SplitPolicy{Mode: s.SplitMode},
 		VOCOneBased:     s.VOCOneBased,
 		VOCDowngradeOBB: s.VOCDowngrade,
+		VOCSeg:          s.VOCSeg,
 	}
 	if s.Format == exporter.FormatYOLO {
 		opts.Task = s.Task
+	}
+	if len(s.Overrides) > 0 {
+		opts.Split.Overrides = s.Overrides
 	}
 	if s.SplitMode == exporter.SplitRandom {
 		seed, err := strconv.ParseInt(strings.TrimSpace(s.Seed), 10, 64)
@@ -296,13 +334,17 @@ func (a *App) exportStart() {
 	s.DirErr, s.RunErr = "", ""
 	s.Busy, s.Written = true, 0
 	s.Total = len(s.Plan.Copies) + len(s.Plan.Files) + 1
+	// One ctx per run: 取消导出 and closing the dialog both reach it, and
+	// finishExport drops it either way (§5.2).
+	ctx, cancel := context.WithCancel(context.Background())
+	s.Cancel = cancel
 	plan, root, win := s.Plan, a.dir, a.win
 	if win == nil {
-		a.finishExport(outDir, exporter.WriteExport(context.Background(), outDir, root, plan, nil))
+		a.finishExport(outDir, exporter.WriteExport(ctx, outDir, root, plan, nil))
 		return
 	}
 	go func() {
-		err := exporter.WriteExport(context.Background(), outDir, root, plan, func(done, total int) {
+		err := exporter.WriteExport(ctx, outDir, root, plan, func(done, total int) {
 			win.Update(func() {
 				if a.ex.Plan != plan {
 					return // the wizard was reopened meanwhile: drop stale progress
@@ -318,7 +360,15 @@ func (a *App) exportStart() {
 // toast, and keeps the dialog open so the path stays readable.
 func (a *App) finishExport(outDir string, err error) {
 	s := &a.ex
-	s.Busy = false
+	s.Busy, s.Cancel = false, nil
+	if errors.Is(err, context.Canceled) {
+		// The exporter removed its temp folder on the way out, so nothing was
+		// written and the same plan can run again (§5.2). Not Done: this run did
+		// not land.
+		s.RunErr = "已取消导出（未写出任何文件）"
+		a.toast = "导出已取消"
+		return
+	}
 	if err != nil {
 		// RunErr, not DirErr: the page refreshes DirErr from the live check every
 		// frame, which would wipe a message about what already went wrong.
@@ -332,6 +382,21 @@ func (a *App) finishExport(outDir string, err error) {
 	s.Written = s.Total
 	a.lastStatus = "已导出数据集到 " + outDir
 	a.toast = "已导出数据集到 " + outDir
+}
+
+// cancelExport stops the running write. The exporter checks the context at each
+// file boundary and then removes its temp folder, so the destination stays as it
+// was; finishExport reports the outcome once the goroutine hands it over.
+func (a *App) cancelExport() {
+	s := &a.ex
+	if !s.Busy || s.Cancel == nil {
+		return
+	}
+	s.Cancel()
+	// Gone before the run ends: nothing else may cancel it, and the button turns
+	// disabled so a second click cannot ask twice (§5.2).
+	s.Cancel = nil
+	a.lastStatus = "正在取消导出…"
 }
 
 // browseExportParent asks the platform for the folder the export goes into. Like
@@ -379,6 +444,10 @@ func (a *App) exportModal(c *ui.Context) {
 			a.exportFooter(c)
 		})
 	})
+	// The per-image split dialog stacks on the wizard's own (§7.2). It is built
+	// as its own overlay rather than inside the wizard's panel, so both dialogs
+	// are layers of the window and the newer one is on top.
+	a.exportAdjustModal(c)
 }
 
 // exportFormatPage is step 1: the target format and its own options.
@@ -401,6 +470,7 @@ func (a *App) exportFormatPage(c *ui.Context) {
 	}
 	if s.Format == exporter.FormatVOC {
 		ui.Checkbox(c.Key("expVocOneBased"), &s.VOCOneBased, "bndbox 写 1-based 坐标（VOC 官方惯例）").Label("VOC 1-based")
+		ui.Checkbox(c.Key("expVocSeg"), &s.VOCSeg, "导出分割 PNG 掩码（SegmentationClass/Object）").Label("VOC seg 掩码")
 		ui.Checkbox(c.Key("expVocDowngrade"), &s.VOCDowngrade, "旋转框降级为外接 bndbox（有损，丢方向）").Label("VOC 降级 OBB")
 	}
 	if s.Format == exporter.FormatCOCO {
@@ -448,6 +518,17 @@ func (a *App) exportReportPage(c *ui.Context) {
 	train, val := splitCounts(s.Plan.Splits)
 	ui.Textf(c, "划分：train %d 张，val %d 张；类别 %d 个（%s）",
 		train, val, len(s.Plan.Categories), strings.Join(planCategoryNames(s.Plan), "、")).FontSize(11).TextColor(t.TextMuted)
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		btn := ui.Button(c.Key("expAdjust"), "逐图调整…")
+		if s.Busy || s.Done {
+			// A run in flight owns the plan, and a finished one is already written.
+			btn = btn.Disabled(true)
+		}
+		if btn.Clicked() {
+			a.openExportAdjust()
+		}
+		ui.Text(c, "逐图改划分不碰源文件，只影响导出").FontSize(10).TextColor(t.TextMuted)
+	})
 	if a.dirty {
 		// The export reads the session, not the store, so pending edits are
 		// included; say so instead of demanding a save (§9 保存检查的反向做法).
@@ -541,7 +622,17 @@ func (a *App) exportOutputPage(c *ui.Context) {
 		ui.Text(c, "导出完成："+s.OutPath).FontSize(12).TextColor(t.Accent)
 	} else if s.Busy {
 		ui.Progress(c, exportRatio(s.Written, s.Total)).Label("导出进度")
-		ui.Textf(c, "正在写入 %d/%d", s.Written, s.Total).FontSize(11).TextColor(t.TextMuted)
+		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+			ui.Textf(c, "正在写入 %d/%d", s.Written, s.Total).FontSize(11).TextColor(t.TextMuted)
+			btn := ui.Button(c.Key("expCancel"), "取消导出")
+			if s.Cancel == nil {
+				// Already cancelled: one call per run, and this one is on its way out.
+				btn = btn.Disabled(true)
+			}
+			if btn.Clicked() {
+				a.cancelExport()
+			}
+		})
 	} else if s.RunErr != "" {
 		ui.Text(c, s.RunErr).FontSize(11).TextColor(t.Danger)
 	} else if s.DirErr != "" {
@@ -605,4 +696,227 @@ func (a *App) exportFooter(c *ui.Context) {
 			a.closeExportWizard()
 		}
 	})
+}
+
+// The per-image split dialog (§7.2). The report step opens it on top of the
+// wizard; every row is a toggle between train and val, and the plan is rebuilt
+// once, on the frame after it closes, so the report's counts and the plan step 4
+// writes are the ones the user just picked.
+
+// openExportAdjust opens the dialog, taking the automatic assignment as its
+// baseline. Plan.Splits already holds the overrides' result, so the policy's own
+// answer has to come from a second plan built without them; that is one dry run
+// of a pure function, the same work the report step already does.
+func (a *App) openExportAdjust() {
+	s := &a.ex
+	if s.Plan == nil || s.Busy || s.Done {
+		return
+	}
+	s.Adjust = true
+	s.AdjustFilter = ""
+	s.adjustAuto = a.autoSplits()
+	s.adjustBase = map[string]string{}
+	for file, split := range s.Overrides {
+		s.adjustBase[file] = split
+	}
+	a.refreshAdjustFiles()
+}
+
+// autoSplits is the split policy's answer with no per-image overrides applied.
+// An option the exporter rejects yields nil, which leaves the dialog empty
+// instead of guessing; the report page already shows that error.
+func (a *App) autoSplits() map[string]string {
+	s := &a.ex
+	opts, err := s.options()
+	if err != nil {
+		return nil
+	}
+	opts.Split.Overrides = nil
+	proj, images := a.exportProjectIR()
+	plan, err := exporter.BuildPlan(proj, images, opts)
+	if err != nil || plan == nil {
+		return nil
+	}
+	out := make(map[string]string, len(plan.Splits))
+	for file, split := range plan.Splits {
+		out[file] = split
+	}
+	return out
+}
+
+// refreshAdjustFiles rebuilds the dialog's rows: the images in a stable order,
+// filtered by AdjustFilter as a case-insensitive substring of the file. It runs
+// when the dialog opens and whenever the filter changed, not every frame.
+func (a *App) refreshAdjustFiles() {
+	s := &a.ex
+	s.adjustFilter = strings.TrimSpace(s.AdjustFilter)
+	needle := strings.ToLower(s.adjustFilter)
+	files := make([]string, 0, len(s.adjustAuto))
+	for file := range s.adjustAuto {
+		if needle != "" && !strings.Contains(strings.ToLower(file), needle) {
+			continue
+		}
+		files = append(files, file)
+	}
+	slices.Sort(files)
+	s.adjustFiles = files
+}
+
+// splitOf is an image's split as the dialog shows it: the override when there is
+// one, the automatic assignment otherwise.
+func (s *exportState) splitOf(file string) string {
+	if split := s.Overrides[file]; split != "" {
+		return split
+	}
+	if split := s.adjustAuto[file]; split != "" {
+		return split
+	}
+	if s.Plan == nil {
+		return ""
+	}
+	return s.Plan.Splits[file]
+}
+
+// toggleAdjustSplit flips one image between train and val. The override only
+// records a difference from the automatic split: a flip that lands back on it
+// drops the key, so Overrides stays the smallest set that says what the user
+// changed (§7.2).
+func (a *App) toggleAdjustSplit(file string) {
+	s := &a.ex
+	auto := s.adjustAuto[file]
+	if auto == "" {
+		return // not an image of this plan
+	}
+	next := "train"
+	if s.splitOf(file) == "train" {
+		next = "val"
+	}
+	if next == auto {
+		delete(s.Overrides, file)
+		return
+	}
+	if s.Overrides == nil {
+		s.Overrides = make(map[string]string, 1)
+	}
+	s.Overrides[file] = next
+}
+
+// resetAdjustSplits drops every override, putting the plan back on the automatic
+// split.
+func (a *App) resetAdjustSplits() {
+	a.ex.Overrides = nil
+}
+
+// finishAdjust runs once the dialog has closed: when the overrides changed while
+// it was open, the plan is rebuilt so the report counts what step 4 will write
+// (§7.2). Rebuilding is pure computation and happens on the main thread.
+func (a *App) finishAdjust() {
+	s := &a.ex
+	if s.Adjust || s.adjustBase == nil {
+		return
+	}
+	changed := len(s.Overrides) != len(s.adjustBase)
+	if !changed {
+		for file, split := range s.adjustBase {
+			if s.Overrides[file] != split {
+				changed = true
+				break
+			}
+		}
+	}
+	s.adjustBase, s.adjustAuto, s.adjustFiles = nil, nil, nil
+	if changed {
+		a.exportBuildPlan()
+	}
+}
+
+// exportAdjustModal is the per-image split dialog. It closes through its own
+// 完成 button, Escape or a click outside, and finishAdjust picks the change up on
+// the same frame in all three cases.
+func (a *App) exportAdjustModal(c *ui.Context) {
+	s := &a.ex
+	if !s.Adjust {
+		a.finishAdjust()
+		return
+	}
+	t := c.Theme()
+	ui.Modal(c, &s.Adjust, func() {
+		ui.Column(c).Width(520).Gap(8).Children(func() {
+			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, "逐图调整划分").FontSize(14).Bold()
+				train, val := adjustCounts(s)
+				ui.Textf(c, "train %d 张 / val %d 张", train, val).FontSize(11).TextColor(t.TextMuted)
+			})
+			ui.Text(c, "点击一行在 train 与 val 之间切换；改回自动划分的结果即恢复原样").FontSize(10).TextColor(t.TextMuted)
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+				ui.TextInput(c.Key("expAdjustFilter"), &s.AdjustFilter).Grow(1).Label("按文件名筛选")
+				ui.Textf(c, "%d 张", len(s.adjustFiles)).FontSize(10).TextColor(t.TextMuted)
+			})
+			if s.adjustFilter != strings.TrimSpace(s.AdjustFilter) {
+				a.refreshAdjustFiles()
+			}
+			if len(s.adjustFiles) == 0 {
+				ui.Text(c, "没有匹配的图片").FontSize(11).TextColor(t.TextMuted)
+			}
+			// The rows live in state: a virtualized list builds only what it shows
+			// and recycles the rest (design rule 4).
+			s.adjustList.Key = func(row int) any {
+				if row < 0 || row >= len(s.adjustFiles) {
+					return row
+				}
+				return s.adjustFiles[row]
+			}
+			s.adjustList.Label = func(row int) string {
+				if row < 0 || row >= len(s.adjustFiles) {
+					return ""
+				}
+				return s.adjustFiles[row]
+			}
+			ui.List(c, &s.adjustList, len(s.adjustFiles), func(row int) {
+				file := s.adjustFiles[row]
+				split := s.splitOf(file)
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+					color := t.TextMuted
+					if split == "val" {
+						color = t.Accent
+					}
+					ui.Text(c, split).FontSize(10).Width(36).TextColor(color)
+					name := ui.Text(c, file).FontSize(11).SingleLine().TruncateMiddle().FillWidth()
+					// A double click's first half arrives as a click and its second
+					// as a double click: a row that toggles takes both, so neither
+					// click is lost.
+					if name.RowClicked() || name.RowDoubleClicked() {
+						a.toggleAdjustSplit(file)
+					}
+				})
+			}).Height(300)
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				if ui.Button(c.Key("expAdjustReset"), "全部重置").Clicked() {
+					a.resetAdjustSplits()
+				}
+				if ui.PrimaryButton(c.Key("expAdjustDone"), "完成").Clicked() {
+					s.Adjust = false
+				}
+			})
+		})
+	})
+	a.finishAdjust()
+}
+
+// adjustCounts counts the dialog's split as it stands now: overrides first, the
+// automatic assignment for the rest. It reads state, not Plan, because Plan still
+// holds the previous run's answer.
+func adjustCounts(s *exportState) (train, val int) {
+	for file, auto := range s.adjustAuto {
+		split := auto
+		if override := s.Overrides[file]; override != "" {
+			split = override
+		}
+		if split == "val" {
+			val++
+			continue
+		}
+		train++
+	}
+	return train, val
 }

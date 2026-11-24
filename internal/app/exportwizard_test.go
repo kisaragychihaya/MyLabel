@@ -1,10 +1,12 @@
 package app
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -469,5 +471,413 @@ func TestExportWizardSplitCarriesReportSamples(t *testing.T) {
 	}
 	if samples != reportSamples {
 		t.Errorf("示例行 = %d，期望 %d：%v", samples, reportSamples, tt.Texts())
+	}
+}
+
+// openExportWizardToStep drives the wizard to a page with the given number of
+// 下一步 clicks, the way a user would (docs/phase5-design.md §5.2, §7.2).
+func openExportWizardToStep(t *testing.T, tt *ui.Tester, next int) {
+	t.Helper()
+	clickText(t, tt, "导出数据集")
+	for i := 0; i < next; i++ {
+		clickText(t, tt, "下一步")
+	}
+}
+
+// exportPlanWrites reports whether the plan writes a file under prefix.
+func exportPlanWrites(p *exporter.Plan, prefix string) bool {
+	for _, f := range p.Files {
+		if strings.HasPrefix(f.Rel, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// exportReportCount is how often the plan's report counted rule.
+func exportReportCount(p *exporter.Plan, rule string) int {
+	for _, stat := range p.Report.Lossy {
+		if stat.Rule == rule {
+			return stat.Count
+		}
+	}
+	return 0
+}
+
+// clickRow clicks a row of the per-image dialog as a separate click: a list
+// reports the second half of a double click as RowDoubleClicked, so two clicks in
+// a row would be one click and one double click (§7.2).
+func clickRow(t *testing.T, tt *ui.Tester, text string) {
+	t.Helper()
+	tt.Advance(time.Second)
+	clickText(t, tt, text)
+}
+
+// TestExportCancelStopsBeforeAnyFile: a cancelled run reports itself as cancelled
+// rather than failed, is not Done, drops its Cancel, and leaves no folder behind,
+// so the same plan can run again (§5.2).
+func TestExportCancelStopsBeforeAnyFile(t *testing.T) {
+	a := storeApp(t, "a.png", "b.png")
+	tt := exportFor(t, a)
+	openExportWizardToStep(t, tt, 3)
+
+	s := &a.ex
+	if s.Step != expStepOutput {
+		t.Fatalf("step = %v，期望输出步", s.Step)
+	}
+	parent := t.TempDir()
+	s.Parent = parent
+	tt.Frame()
+	if s.DirErr != "" {
+		t.Fatalf("目标被拒: %s", s.DirErr)
+	}
+
+	// A cancel that arrives before the first file boundary: what 取消导出 does to
+	// a run that has not reached a check yet.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	outDir := filepath.Join(parent, defaultExportDirName)
+	a.finishExport(outDir, exporter.WriteExport(ctx, outDir, a.dir, s.Plan, nil))
+
+	if s.Busy {
+		t.Error("取消后仍在忙")
+	}
+	if s.Done {
+		t.Error("取消不该算作完成")
+	}
+	if s.Cancel != nil {
+		t.Error("取消后 Cancel 没有清空")
+	}
+	if want := "已取消导出（未写出任何文件）"; s.RunErr != want {
+		t.Errorf("RunErr = %q，期望 %q", s.RunErr, want)
+	}
+	if want := "导出已取消"; a.toast != want {
+		t.Errorf("toast = %q，期望 %q", a.toast, want)
+	}
+	if _, err := os.Stat(outDir); !os.IsNotExist(err) {
+		t.Errorf("取消后留下了 %s: %v", outDir, err)
+	}
+	if _, err := os.Stat(outDir + ".mylabel-tmp"); !os.IsNotExist(err) {
+		t.Errorf("取消后留下了临时目录: %v", err)
+	}
+
+	a.toast = ""
+	tt.Frame()
+	if !tt.HasText("已取消导出（未写出任何文件）") {
+		t.Errorf("输出页没有显示取消结果: %v", tt.Texts())
+	}
+	// Nothing is Done, so the same plan is still ready to run.
+	if s.Plan == nil {
+		t.Error("取消丢掉了计划")
+	}
+	if !strings.Contains(s.RunErr, "取消") {
+		t.Errorf("RunErr = %q", s.RunErr)
+	}
+}
+
+// TestExportCancelButton: a run in flight shows 取消导出 on the output page, one
+// click asks the run to stop and disarms the button so it cannot ask twice
+// (§5.2).
+func TestExportCancelButton(t *testing.T) {
+	a := storeApp(t, "a.png")
+	tt := exportFor(t, a)
+	openExportWizardToStep(t, tt, 3)
+
+	s := &a.ex
+	s.Parent = t.TempDir()
+	// Without a window exportStart runs inline, so the frame where a run is in
+	// flight is set up directly; everything below it is the real state machine.
+	calls := 0
+	s.Busy, s.Written, s.Total = true, 1, 3
+	s.Cancel = func() { calls++ }
+	tt.Frame()
+	if !tt.HasText("取消导出") {
+		t.Fatalf("忙时没有渲染取消按钮: %v", tt.Texts())
+	}
+	if !tt.HasText("正在写入 1/3") {
+		t.Errorf("没有渲染进度: %v", tt.Texts())
+	}
+	if a.ex.Written != 1 || a.ex.Total != 3 {
+		t.Errorf("进度 = %d/%d，期望 1/3", a.ex.Written, a.ex.Total)
+	}
+
+	clickText(t, tt, "取消导出")
+	if calls != 1 {
+		t.Fatalf("取消被调用了 %d 次，期望 1", calls)
+	}
+	if s.Cancel != nil {
+		t.Error("取消后 Cancel 没有清空")
+	}
+	if want := "正在取消导出…"; a.lastStatus != want {
+		t.Errorf("lastStatus = %q，期望 %q", a.lastStatus, want)
+	}
+
+	// The second click is refused: the button is disabled and Cancel is gone.
+	a.lastStatus = "sentinel"
+	if err := tt.Click("取消导出"); err == nil {
+		if calls != 1 {
+			t.Errorf("第二次点击又调了一次取消，共 %d 次", calls)
+		}
+		if a.lastStatus != "sentinel" {
+			t.Errorf("disabled 的按钮仍然生效: lastStatus = %q", a.lastStatus)
+		}
+	}
+}
+
+// TestExportCancelOnClose: closing the wizard during a run cancels the write
+// instead of leaving a background export nobody can see, and what is left of the
+// state is dropped when the wizard opens again (§5.2).
+func TestExportCancelOnClose(t *testing.T) {
+	a := storeApp(t, "a.png")
+	tt := exportFor(t, a)
+	clickText(t, tt, "导出数据集")
+
+	s := &a.ex
+	calls := 0
+	s.Busy, s.Parent = true, t.TempDir()
+	s.Cancel = func() { calls++ }
+	a.closeExportWizard()
+
+	if calls != 1 {
+		t.Fatalf("关闭时取消被调用了 %d 次，期望 1", calls)
+	}
+	if s.Open {
+		t.Error("关闭后对话框还开着")
+	}
+	if s.Cancel != nil {
+		t.Error("关闭并取消后 Cancel 没有清空")
+	}
+	if !s.Busy {
+		t.Error("取消后到 finishExport 之前状态应当保留，好让结果落进同一个向导")
+	}
+
+	// The outcome of the cancelled run still lands.
+	a.finishExport("/nowhere", context.Canceled)
+	if s.Busy || s.Done {
+		t.Errorf("取消后 = busy %v done %v，期望都 false", s.Busy, s.Done)
+	}
+	if want := "已取消导出（未写出任何文件）"; s.RunErr != want {
+		t.Errorf("RunErr = %q，期望 %q", s.RunErr, want)
+	}
+
+	// Reopening starts from a clean slate: no run, no overrides, step 1.
+	a.openExportWizard()
+	if !a.ex.Open || a.ex.Step != expStepFormat {
+		t.Errorf("重开 = open %v step %v", a.ex.Open, a.ex.Step)
+	}
+	if a.ex.Busy || a.ex.RunErr != "" || len(a.ex.Overrides) != 0 || a.ex.Cancel != nil {
+		t.Errorf("重开后残留: %+v", a.ex)
+	}
+
+	// A close outside a run forgets everything instead of hiding it.
+	a.closeExportWizard()
+	if a.ex.Open || a.ex.Parent != "" || a.ex.Step != expStepFormat {
+		t.Errorf("空闲关闭后残留: %+v", a.ex)
+	}
+}
+
+// TestExportAdjustDialog: the report step opens the per-image dialog, a click
+// flips one image between train and val while keeping Overrides minimal, the
+// filter is a case-insensitive substring, 全部重置 clears the overrides, and
+// closing rebuilds the plan so the report and step 4 agree (§7.2).
+func TestExportAdjustDialog(t *testing.T) {
+	a := storeApp(t, "train/a.png", "val/b.png")
+	tt := exportFor(t, a)
+	openExportWizardToStep(t, tt, 2)
+
+	s := &a.ex
+	if s.Step != expStepReport || s.Plan == nil || s.Err != "" {
+		t.Fatalf("报告步 = step %v plan %v err %q", s.Step, s.Plan, s.Err)
+	}
+	if s.Plan.Splits["train/a.png"] != "train" || s.Plan.Splits["val/b.png"] != "val" {
+		t.Fatalf("划分 = %v，期望 a=train b=val", s.Plan.Splits)
+	}
+
+	clickText(t, tt, "逐图调整…")
+	if !s.Adjust {
+		t.Fatalf("对话框没有打开（texts=%v）", tt.Texts())
+	}
+	if got := strings.Join(s.adjustFiles, ","); got != "train/a.png,val/b.png" {
+		t.Fatalf("行 = %q，期望按文件名排序的两张图", got)
+	}
+	if !tt.HasText("逐图调整划分") || !tt.HasText("train/a.png") {
+		t.Errorf("对话框没有渲染行: %v", tt.Texts())
+	}
+
+	// A click flips the row; the plan itself waits for the dialog to close.
+	clickRow(t, tt, "train/a.png")
+	if got := s.Overrides["train/a.png"]; got != "val" {
+		t.Fatalf("Overrides = %v，期望 train/a.png→val", s.Overrides)
+	}
+	if s.Plan.Splits["train/a.png"] != "train" {
+		t.Error("对话框还开着就重建了计划")
+	}
+
+	// A second click lands back on the automatic split, which drops the key.
+	clickRow(t, tt, "train/a.png")
+	if len(s.Overrides) != 0 {
+		t.Fatalf("改回自动结果后应删键，得到 %v", s.Overrides)
+	}
+
+	// The filter matches a substring of the file, case-insensitively.
+	s.AdjustFilter = "B.PNG"
+	tt.Frame()
+	if got := strings.Join(s.adjustFiles, ","); got != "val/b.png" {
+		t.Errorf("筛选后行 = %q，期望只有 val/b.png", got)
+	}
+	s.AdjustFilter = "zzz"
+	tt.Frame()
+	if len(s.adjustFiles) != 0 {
+		t.Errorf("无匹配时行 = %v", s.adjustFiles)
+	}
+	if !tt.HasText("没有匹配的图片") {
+		t.Errorf("无匹配时没有提示: %v", tt.Texts())
+	}
+	s.AdjustFilter = ""
+	tt.Frame()
+	if len(s.adjustFiles) != 2 {
+		t.Fatalf("清空筛选后行 = %v", s.adjustFiles)
+	}
+
+	clickRow(t, tt, "train/a.png")
+	clickText(t, tt, "完成")
+	if s.Adjust {
+		t.Error("完成后对话框还开着")
+	}
+	if s.adjustBase != nil || s.adjustAuto != nil || s.adjustFiles != nil {
+		t.Errorf("关闭后对话框状态没清: %+v", s)
+	}
+	if got := s.Plan.Splits["train/a.png"]; got != "val" {
+		t.Fatalf("关闭后划分 = %v，期望 train/a.png 已被改成 val", s.Plan.Splits)
+	}
+	if train, val := splitCounts(s.Plan.Splits); train != 0 || val != 2 {
+		t.Errorf("关闭后 = train %d / val %d，期望 0/2", train, val)
+	}
+
+	// Reopening shows the override, and clicking it again restores the automatic
+	// split: a flip that agrees with the policy drops the key.
+	clickText(t, tt, "逐图调整…")
+	if got := s.splitOf("train/a.png"); got != "val" {
+		t.Fatalf("重开后行显示 %q，期望 val", got)
+	}
+	clickRow(t, tt, "train/a.png")
+	if len(s.Overrides) != 0 {
+		t.Fatalf("改回自动值应删键，得到 %v", s.Overrides)
+	}
+	clickText(t, tt, "完成")
+	if train, val := splitCounts(s.Plan.Splits); train != 1 || val != 1 {
+		t.Errorf("恢复后 = train %d / val %d，期望 1/1", train, val)
+	}
+
+	// 全部重置 drops every override at once.
+	clickText(t, tt, "逐图调整…")
+	clickRow(t, tt, "train/a.png")
+	clickRow(t, tt, "val/b.png")
+	if len(s.Overrides) != 2 {
+		t.Fatalf("两次点击后 Overrides = %v，期望 2 项", s.Overrides)
+	}
+	clickText(t, tt, "全部重置")
+	if len(s.Overrides) != 0 {
+		t.Fatalf("全部重置后 Overrides = %v", s.Overrides)
+	}
+	clickText(t, tt, "完成")
+	if train, val := splitCounts(s.Plan.Splits); train != 1 || val != 1 {
+		t.Errorf("重置后 = train %d / val %d，期望 1/1", train, val)
+	}
+}
+
+// TestExportAdjustReachesStepFour: the plan the output step writes is the one the
+// dialog produced, so an override changes where an image lands on disk (§7.2).
+func TestExportAdjustReachesStepFour(t *testing.T) {
+	a := storeApp(t, "train/a.png")
+	tt := exportFor(t, a)
+	openExportWizardToStep(t, tt, 2)
+
+	s := &a.ex
+	clickText(t, tt, "逐图调整…")
+	clickRow(t, tt, "train/a.png")
+	clickText(t, tt, "完成")
+	if got := s.Plan.Splits["train/a.png"]; got != "val" {
+		t.Fatalf("Splits = %v，期望 val", s.Plan.Splits)
+	}
+
+	clickText(t, tt, "下一步")
+	parent := t.TempDir()
+	s.Parent = parent
+	tt.Frame()
+	clickText(t, tt, "开始导出")
+	if !s.Done {
+		t.Fatalf("导出没完成: err %q", s.RunErr)
+	}
+	outDir := filepath.Join(parent, defaultExportDirName)
+	mustExist(t, filepath.Join(outDir, "images", "val", "a.png"))
+	if _, err := os.Stat(filepath.Join(outDir, "images", "train")); !os.IsNotExist(err) {
+		t.Errorf("被改到 val 的图片仍写进了 train: %v", err)
+	}
+}
+
+// TestExportVOCSegMasks: the VOC page's seg checkbox is on by default and reaches
+// the exporter, so polygons keep their masks unless the user turns it off (§6).
+func TestExportVOCSegMasks(t *testing.T) {
+	a := storeApp(t, "a.png")
+	setAnnsOn(t, a, "a.png", []Ann{{
+		ID: "p1", Cat: 0, Kind: KindPoly,
+		Points: []Point{{10, 10}, {60, 10}, {60, 40}, {10, 40}},
+	}})
+	tt := exportFor(t, a)
+	clickText(t, tt, "导出数据集")
+
+	s := &a.ex
+	if !s.VOCSeg {
+		t.Fatal("VOC seg 掩码默认应勾选")
+	}
+	clickText(t, tt, "VOC")
+	const seg = "导出分割 PNG 掩码（SegmentationClass/Object）"
+	if !tt.HasText(seg) {
+		t.Fatalf("VOC 页没有渲染掩码选项: %v", tt.Texts())
+	}
+	opts, err := s.options()
+	if err != nil {
+		t.Fatalf("options: %v", err)
+	}
+	if !opts.VOCSeg {
+		t.Error("options 没接上 VOCSeg")
+	}
+
+	clickText(t, tt, seg)
+	if s.VOCSeg {
+		t.Error("点击后应取消勾选")
+	}
+	if opts, err = s.options(); err != nil || opts.VOCSeg {
+		t.Errorf("取消勾选后 options = %+v / %v", opts, err)
+	}
+	clickText(t, tt, seg)
+	if !s.VOCSeg {
+		t.Fatal("再点一次应重新勾选")
+	}
+
+	clickText(t, tt, "下一步")
+	clickText(t, tt, "下一步")
+	if s.Err != "" || s.Plan == nil {
+		t.Fatalf("试运行失败: err=%q", s.Err)
+	}
+	if !exportPlanWrites(s.Plan, "SegmentationClass/") || !exportPlanWrites(s.Plan, "SegmentationObject/") {
+		t.Errorf("VOCSeg 开时没有写掩码: %v", s.Plan.Files)
+	}
+	if n := exportReportCount(s.Plan, exporter.RuleSegDropped); n != 0 {
+		t.Errorf("%s ×%d，VOCSeg 开时不该丢弃 seg", exporter.RuleSegDropped, n)
+	}
+
+	// Turning it off returns to the old behaviour: polygons are skipped and counted.
+	s.VOCSeg = false
+	a.exportBuildPlan()
+	if s.Plan == nil {
+		t.Fatalf("关掉 VOCSeg 后试运行失败: %q", s.Err)
+	}
+	if exportPlanWrites(s.Plan, "SegmentationClass/") {
+		t.Errorf("VOCSeg 关时仍写了掩码: %v", s.Plan.Files)
+	}
+	if n := exportReportCount(s.Plan, exporter.RuleSegDropped); n != 1 {
+		t.Errorf("%s ×%d，期望 1", exporter.RuleSegDropped, n)
 	}
 }
