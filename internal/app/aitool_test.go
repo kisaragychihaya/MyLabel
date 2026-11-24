@@ -586,3 +586,224 @@ func TestAIIconsPaint(t *testing.T) {
 		}
 	}
 }
+
+// TestAIPrefetchOnFirstPoint: the first collected point starts encoding the
+// current image in the background (docs/phase7-design.md §6). With no window the
+// same work runs inline, so the embedding is cached by the time the click returns;
+// the prompt's second point starts nothing, and neither does a click on an image
+// whose embedding is already cached.
+func TestAIPrefetchOnFirstPoint(t *testing.T) {
+	a := aiTestApp()
+	var calls, gotIndex int
+	var gotPath string
+	a.aiEncodeHook = func(info *ImageInfo, imgIndex int) (sam2.Embedding, error) {
+		calls++
+		gotIndex, gotPath = imgIndex, info.Path
+		return sam2.Embedding{}, nil
+	}
+	a.setTool(ToolAI)
+	status := a.lastStatus
+
+	clickAt(a, Point{X: 400, Y: 300}, 1)
+	if calls != 1 {
+		t.Fatalf("首点后编码 %d 次，期望 1 次", calls)
+	}
+	if want := a.images[a.loaded].Path; gotIndex != a.loaded || gotPath != want {
+		t.Errorf("编码的是图 %d（%q），期望 %d（%q）", gotIndex, gotPath, a.loaded, want)
+	}
+	// No window: the encode ran inline and had landed before the click returned.
+	if a.aiEmbFor != a.loaded {
+		t.Errorf("落地后 aiEmbFor = %d，期望 %d", a.aiEmbFor, a.loaded)
+	}
+	if a.aiEncBusy || a.aiEncFor != -1 {
+		t.Errorf("落地后 aiEncBusy = %v、aiEncFor = %d，期望 false 与 -1", a.aiEncBusy, a.aiEncFor)
+	}
+	// Best effort: it reports nothing on the way.
+	if a.lastStatus != status {
+		t.Errorf("预编码改了状态栏：%q → %q", status, a.lastStatus)
+	}
+	if len(a.aiPoints) != 1 {
+		t.Errorf("首点后 aiPoints = %v，期望 1 个点", a.aiPoints)
+	}
+
+	// The prompt's second point is not a new start.
+	clickAt(a, Point{X: 420, Y: 300}, 1)
+	if calls != 1 {
+		t.Errorf("第二个点又触发了一次编码（共 %d 次），期望仍是 1 次", calls)
+	}
+
+	// Esc drops the points but not the cached embedding, so the next first click
+	// finds the cache and encodes nothing.
+	if !keyWith(a, ui.KeyEscape, 0) {
+		t.Fatalf("有点时 Esc 未被处理")
+	}
+	if a.aiEmbFor != a.loaded {
+		t.Fatalf("Esc 后 aiEmbFor = %d，期望缓存仍在（%d）", a.aiEmbFor, a.loaded)
+	}
+	clickAt(a, Point{X: 200, Y: 200}, 1)
+	if calls != 1 {
+		t.Errorf("缓存命中时又编码了一次（共 %d 次），期望 1 次", calls)
+	}
+}
+
+// TestAIPrefetchDedup: one encode at a time, app-wide — an image being encoded,
+// another image's encode in flight, an embedding already cached and a prompt that
+// never collected a point all start none (docs/phase7-design.md §6).
+func TestAIPrefetchDedup(t *testing.T) {
+	a := aiTestApp()
+	var calls int
+	a.aiEncodeHook = func(info *ImageInfo, imgIndex int) (sam2.Embedding, error) {
+		calls++
+		return sam2.Embedding{}, nil
+	}
+	a.setTool(ToolAI)
+
+	// This image is already being encoded.
+	a.aiEncBusy, a.aiEncFor = true, a.loaded
+	clickAt(a, Point{X: 400, Y: 300}, 1)
+	if calls != 0 {
+		t.Errorf("同图在途时又编码了 %d 次，期望 0 次", calls)
+	}
+	if !a.aiEncBusy || a.aiEncFor != a.loaded {
+		t.Errorf("在途标志被改动：aiEncBusy = %v、aiEncFor = %d", a.aiEncBusy, a.aiEncFor)
+	}
+
+	// Another image is: the flag is app-wide, so this click waits for it.
+	a.aiEncBusy, a.aiEncFor = true, 7
+	a.aiPoints = nil
+	clickAt(a, Point{X: 401, Y: 300}, 1)
+	if calls != 0 {
+		t.Errorf("别的图在途时又编码了 %d 次，期望 0 次", calls)
+	}
+
+	// Nothing in flight, but the cache already holds this image.
+	a.aiEncBusy, a.aiEncFor = false, -1
+	a.aiEmbFor = a.loaded
+	a.aiPoints = nil
+	clickAt(a, Point{X: 402, Y: 300}, 1)
+	if calls != 0 {
+		t.Errorf("缓存命中时又编码了 %d 次，期望 0 次", calls)
+	}
+
+	// A click the empty category list blocks collects no point, so there is nothing
+	// to encode ahead of.
+	a.aiEmbFor, a.aiPoints, a.categories = -1, nil, nil
+	clickAt(a, Point{X: 403, Y: 300}, 1)
+	if calls != 0 || len(a.aiPoints) != 0 {
+		t.Errorf("空类别表下编码 %d 次、收集 %v，期望两者都不发生", calls, a.aiPoints)
+	}
+
+	// An inference in flight holds the cache handle until it lands: the encode waits
+	// for it, and the point is still collected.
+	a.categories, a.aiPoints = defaultCategoryList(), nil
+	a.aiBusy = true
+	clickAt(a, Point{X: 404, Y: 300}, 1)
+	if calls != 0 {
+		t.Errorf("推理在途时编码了 %d 次，期望 0 次", calls)
+	}
+	if len(a.aiPoints) != 1 {
+		t.Errorf("推理在途时的点击收集了 %v，期望 1 个点", a.aiPoints)
+	}
+	a.aiBusy = false
+}
+
+// TestAIPrefetchDiscarded: an encode that lands after the user moved on drops its
+// embedding instead of filling the cache, a failure says nothing, and every
+// landing clears the in-flight flag (docs/phase7-design.md §6).
+func TestAIPrefetchDiscarded(t *testing.T) {
+	a := aiTestApp()
+	a.setTool(ToolAI)
+
+	// Esc while the encode was in flight: the generation moved on.
+	gen := a.aiGen + 1
+	a.aiGen = gen
+	a.aiEncBusy, a.aiEncFor = true, a.loaded
+	a.aiDropPoints()
+	a.aiEncodeLanded(sam2.Embedding{}, nil, gen, a.loaded)
+	if a.aiEmbFor != -1 {
+		t.Errorf("过期编码落地后 aiEmbFor = %d，期望 -1（未收编）", a.aiEmbFor)
+	}
+	if a.aiEncBusy || a.aiEncFor != -1 {
+		t.Errorf("过期编码落地后 aiEncBusy = %v、aiEncFor = %d，期望 false 与 -1", a.aiEncBusy, a.aiEncFor)
+	}
+
+	// The generation still matches, but the user switched images.
+	a.images = append(a.images, ImageInfo{Path: "t2", Name: "t2.png", Width: 800, Height: 600})
+	a.loaded = 1
+	a.aiEncBusy, a.aiEncFor = true, 1
+	a.aiEncodeLanded(sam2.Embedding{}, nil, a.aiGen, 0)
+	if a.aiEmbFor != -1 {
+		t.Errorf("换图后落地的编码 aiEmbFor = %d，期望 -1（未收编）", a.aiEmbFor)
+	}
+
+	// A failure is silent: no status, no cache, flag cleared.
+	a.lastStatus = ""
+	a.aiEncBusy, a.aiEncFor = true, 1
+	a.aiEncodeLanded(sam2.Embedding{}, errors.New("boom"), a.aiGen, 1)
+	if a.lastStatus != "" {
+		t.Errorf("预编码失败把状态栏改成了 %q，期望静默", a.lastStatus)
+	}
+	if a.aiEmbFor != -1 || a.aiEncBusy {
+		t.Errorf("失败落地后 aiEmbFor = %d、aiEncBusy = %v，期望 -1 与 false", a.aiEmbFor, a.aiEncBusy)
+	}
+}
+
+// TestAIPrefetchThenInference: the embedding the encode-ahead cached is what the
+// inference finds, so the run only decodes and says so; without one the
+// double-click encodes for itself. Either way the annotation lands and the cache
+// survives the run (docs/phase7-design.md §3, §6).
+func TestAIPrefetchThenInference(t *testing.T) {
+	// No hook, so the prefetch takes the real encoder over a fixture path that is
+	// not a file: it fails without a word. The inference then encodes its own.
+	a := aiTestApp()
+	var seen []string
+	a.aiPredict = func(img *ImageInfo, pts []Point) ([]float32, int, int, error) {
+		seen = append(seen, a.lastStatus)
+		return aiTestMask(8, 6, 2, 1, 5, 4), 8, 6, nil
+	}
+	a.setTool(ToolAI)
+	quiet := a.lastStatus
+	clickAt(a, Point{X: 400, Y: 300}, 1)
+	if a.lastStatus != quiet {
+		t.Errorf("编码失败改了状态栏：%q → %q", quiet, a.lastStatus)
+	}
+	if a.aiEmbFor != -1 || a.aiEncBusy {
+		t.Errorf("编码失败后 aiEmbFor = %d、aiEncBusy = %v，期望 -1 与 false", a.aiEmbFor, a.aiEncBusy)
+	}
+	clickAt(a, Point{X: 410, Y: 310}, 2)
+	if len(seen) != 1 || seen[0] != locales.StatusAIEncoding() {
+		t.Errorf("无缓存时推理期间状态栏 = %v，期望 [%q]", seen, locales.StatusAIEncoding())
+	}
+	if got := len(anns(a)); got != 1 {
+		t.Fatalf("无缓存时推理产生 %d 条标注，期望 1 条（状态栏 %q）", got, a.lastStatus)
+	}
+
+	// With a successful prefetch the double-click starts from the cache.
+	b := aiTestApp()
+	b.aiEncodeHook = func(info *ImageInfo, imgIndex int) (sam2.Embedding, error) {
+		return sam2.Embedding{}, nil
+	}
+	var decodes int
+	var status string
+	b.aiPredict = func(img *ImageInfo, pts []Point) ([]float32, int, int, error) {
+		decodes++
+		status = b.lastStatus
+		return aiTestMask(8, 6, 2, 1, 5, 4), 8, 6, nil
+	}
+	b.setTool(ToolAI)
+	clickAt(b, Point{X: 400, Y: 300}, 1)
+	if b.aiEmbFor != b.loaded {
+		t.Fatalf("预编码后 aiEmbFor = %d，期望 %d", b.aiEmbFor, b.loaded)
+	}
+	clickAt(b, Point{X: 410, Y: 310}, 1)
+	clickAt(b, Point{X: 420, Y: 320}, 2)
+	if decodes != 1 || status != locales.StatusAIDecoding() {
+		t.Errorf("预编码后推理 %d 次、期间状态栏 %q，期望 1 次与 %q", decodes, status, locales.StatusAIDecoding())
+	}
+	if got := len(anns(b)); got != 1 {
+		t.Fatalf("预编码后推理产生 %d 条标注，期望 1 条（状态栏 %q）", got, b.lastStatus)
+	}
+	if b.aiEmbFor != b.loaded {
+		t.Errorf("推理后 aiEmbFor = %d，期望缓存仍在（%d）", b.aiEmbFor, b.loaded)
+	}
+}

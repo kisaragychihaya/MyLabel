@@ -120,9 +120,18 @@ type App struct {
 	aiGen      uint64
 	aiEmb      sam2.Embedding
 	aiEmbFor   int
+	// The encode running ahead of the first click's inference (§6): aiEncBusy
+	// says one is in flight and aiEncFor which image it belongs to (-1 = none).
+	// There is at most one, app-wide, whoever asked for it. It shares aiGen with
+	// the inferences, so an image switch or a new trigger makes it stale exactly
+	// like a late inference result.
+	aiEncBusy bool
+	aiEncFor  int
 	// aiPredict replaces the real pipeline in tests: it answers one inference for
-	// a prompt and needs no DLL (aitool.go).
-	aiPredict aiPredictFunc
+	// a prompt and needs no DLL (aitool.go). aiEncodeHook does the same for the
+	// encoder alone; nil means the real client encodes.
+	aiPredict    aiPredictFunc
+	aiEncodeHook aiEncodeFunc
 
 	// Click-by-click draft in progress (ModePolyCreate): the vertices clicked so
 	// far, in image pixels — a polygon's, or the four corners of a rotated box
@@ -174,6 +183,7 @@ func New() *App {
 		dirtyImages: make(map[int64]bool),
 		showLabels:  true,
 		aiEmbFor:    -1,
+		aiEncFor:    -1,
 	}
 	a.detectSAM2()
 	return a

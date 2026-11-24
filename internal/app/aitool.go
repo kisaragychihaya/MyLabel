@@ -17,6 +17,13 @@ import (
 // in the tool's other mode. The whole pipeline is §3 of the contract; the tool
 // only exists when the native library was detected at startup, so a machine
 // without it keeps the seven-button strip and notices nothing (§2, §4).
+//
+// The first collected point starts encoding the image right away, in the
+// background (§6): by the time the user double-clicks, the heavy half of the work
+// is usually already cached and the run only has to decode. Encoding ahead is
+// best effort — silent, at most one in flight, dropped when the image or the
+// generation moved on — and it never changes what the inference does: a
+// double-click whose embedding is not cacheable yet simply encodes again.
 
 const (
 	// aiThreshold is the mask threshold: a logit above 0 is the same decision as
@@ -38,6 +45,11 @@ var errAINoMask = errors.New("ai: the mask has no foreground")
 // returns the mask its prompt produced. A nil field means the real client
 // (aiInferSAM2) answers; tests replace it so no DLL is needed (§8).
 type aiPredictFunc func(img *ImageInfo, pts []Point) (mask []float32, mw, mh int, err error)
+
+// aiEncodeFunc is the injectable encoder: it turns one image into the embedding
+// the decoder prompts against. A nil field means the real client encodes
+// (readRGB24 + sam.Encode); tests replace it so no DLL is needed (§8).
+type aiEncodeFunc func(info *ImageInfo, imgIndex int) (sam2.Embedding, error)
 
 // aiRun is one inference's outcome, handed from the worker (or the inline path)
 // back to the main thread, which alone touches the embedding cache.
@@ -74,6 +86,12 @@ func (a *App) aiClick(p Point, clicks int) {
 		return
 	}
 	a.aiPoints = append(a.aiPoints, p)
+	if len(a.aiPoints) == 1 {
+		// The first point is the moment the inference becomes likely: start the
+		// encoder now, in the background, so the double-click that follows finds
+		// the embedding waiting (§6).
+		a.aiEncodeAhead()
+	}
 }
 
 // aiDropPoints forgets the collected points and invalidates every inference
@@ -94,6 +112,134 @@ func (a *App) aiReleaseEmbedding() {
 		return
 	}
 	a.aiEmb.Release()
+}
+
+// aiEncodeAhead encodes the current image in the background as soon as the first
+// foreground point is collected (§6), so the double-click that follows has only
+// the decode left to do. It is deliberately silent: no status, no aiBusy, and a
+// failure is simply forgotten — the next first click tries again, and the
+// inference itself reports whatever goes wrong when the user actually asks for a
+// mask. It runs on the main thread, since it decides what the cache will hold;
+// the encode it starts never reads App state. It starts nothing while an
+// inference is in flight — the reason is in the guard below.
+func (a *App) aiEncodeAhead() {
+	img := a.curImage()
+	if img == nil {
+		return
+	}
+	imgIndex := a.loaded
+	// One encode at a time, app-wide: this skips the image already being encoded
+	// and any other image's encode still in flight, and leaves an image whose
+	// embedding the cache already holds alone.
+	if a.aiEmbFor == imgIndex || a.aiEncBusy {
+		return
+	}
+	// Not while an inference runs. This is not about the trigger (a double-click
+	// during a run is refused anyway): it is about the landing. The cache handle
+	// aiAdoptEmbedding releases must have no other owner, and the one way it can
+	// have one is a run that started decoding with it and then saw the image
+	// switch — aiReleaseEmbedding defers that native release to aiFinish, so the
+	// handle sits in a.aiEmb while a worker still reads it. Waiting for aiBusy to
+	// clear means the landing's gen check (no trigger, no Esc, no image switch
+	// since the encode started) is also proof that nobody holds the handle.
+	if a.aiBusy {
+		return
+	}
+	hook, samClient := a.aiEncodeHook, a.sam
+	if hook == nil && samClient == nil {
+		return
+	}
+	// Its own generation, shared with the inferences: Esc, an image switch and a
+	// new trigger all bump the counter, so an encode that lands afterwards can
+	// tell it is stale instead of overwriting the cache of what replaced it.
+	a.aiGen++
+	gen := a.aiGen
+	a.aiEncBusy, a.aiEncFor = true, imgIndex
+
+	info := *img
+	win := a.win
+	if win == nil {
+		emb, err := aiEncode(&info, imgIndex, hook, samClient)
+		a.aiEncodeLanded(emb, err, gen, imgIndex)
+		return
+	}
+	go func() {
+		emb, err := aiEncode(&info, imgIndex, hook, samClient)
+		win.Update(func() { a.aiEncodeLanded(emb, err, gen, imgIndex) })
+	}()
+}
+
+// aiEncode runs one encoder pass without touching App state: the hook a test
+// injected, otherwise the real client over the image file. Everything it needs
+// is handed in, because with a window it runs on a goroutine (design rule 2).
+func aiEncode(info *ImageInfo, imgIndex int, hook aiEncodeFunc, sam *sam2.Client) (sam2.Embedding, error) {
+	if hook != nil {
+		return hook(info, imgIndex)
+	}
+	if sam == nil {
+		return sam2.Embedding{}, errors.New("ai: the native library is not available")
+	}
+	rgb, w, h, err := readRGB24(info.Path)
+	if err != nil {
+		return sam2.Embedding{}, err
+	}
+	emb, err := sam.Encode(rgb, w, h, w*3)
+	if err != nil {
+		return sam2.Embedding{}, err
+	}
+	// Warm the decoder net too: its first Decode lazily creates the net, which
+	// costs seconds on Vulkan (decoder_create ≈ 3.2s on the RTX 4060, the same
+	// order as the encode). A throwaway decode against the fresh embedding hides
+	// that in the background as well, so the double-click that follows is decode
+	// only. Best effort: a warmup failure changes nothing — the real decode
+	// reports it when the user asks for a mask.
+	if _, werr := sam.Decode(emb, []float32{float32(w) / 2, float32(h) / 2}, []int32{1}); werr != nil {
+		// silent: the inference re-runs the decode and surfaces the error
+	}
+	return emb, nil
+}
+
+// aiEncodeLanded hands a finished encode back to the main thread and clears the
+// busy flag first, whatever happens next. A failure is dropped in silence: the
+// user asked for nothing visible. A run whose generation or image no longer
+// matches is stale — its embedding is released here and the cache keeps what the
+// current image's own runs put there (§6).
+func (a *App) aiEncodeLanded(emb sam2.Embedding, err error, gen uint64, imgIndex int) {
+	a.aiEncBusy, a.aiEncFor = false, -1
+	if err != nil {
+		return
+	}
+	if gen != a.aiGen || imgIndex != a.loaded {
+		emb.Release()
+		return
+	}
+	a.aiAdoptEmbedding(emb, imgIndex)
+}
+
+// aiAdoptEmbedding makes emb the cache entry for imgIndex, releasing the
+// embedding it replaces. This is the only writer of the cache, so the older
+// handle has a single owner and is freed exactly once.
+//
+// The invariant it relies on: the handle being replaced is not in use by any
+// running inference. aiEncodeAhead refuses to start while aiBusy, and its
+// landing only adopts when its gen still matches — which means no trigger, no Esc
+// and no image switch happened meanwhile — so nothing can be holding the old
+// handle when the encode-ahead adopts. aiFinish runs after its own worker
+// returned, and a run that encodes (fresh) was not decoding with the cache.
+//
+// Two producers land here — the encode-ahead, between the clicks, and aiFinish —
+// and the generation they share is what keeps them from interleaving badly: only
+// the run that is still current passes its gen check, so a pre-encoded embedding
+// is either what the inference decodes with (it is in the cache by then) or is
+// replaced by the one that inference encoded itself. When both encode, the cost
+// is one extra Encode and no correctness risk: each handle has one owner (freed
+// here, or by the run that lands stale), and the native client serializes calls
+// on a handle with its own mutex (sam2_ncnn.cpp, enc->mu for the encoder and the
+// decoder's for the decoder), so two threads encoding is safe, just serial.
+func (a *App) aiAdoptEmbedding(emb sam2.Embedding, imgIndex int) {
+	a.aiEmb.Release()
+	a.aiEmb = emb
+	a.aiEmbFor = imgIndex
 }
 
 // aiGenerate turns the collected points into an annotation (§3). The encoder and
@@ -223,12 +369,13 @@ func (a *App) aiFinish(res aiRun, gen uint64, imgIndex int, cat int, id string, 
 		return
 	}
 	if res.fresh {
-		// Only the main thread replaces the cache, so the older embedding (if any)
-		// is released here and nowhere else.
-		a.aiEmb.Release()
-		a.aiEmb = res.emb
+		// The run encoded the image itself (the cache held nothing usable when it
+		// started): its embedding becomes the cache entry.
+		a.aiAdoptEmbedding(res.emb, imgIndex)
+	} else {
+		// It decoded with the cache, so the entry stays where it is.
+		a.aiEmbFor = imgIndex
 	}
-	a.aiEmbFor = imgIndex
 
 	ann, err := buildAIAnn(res.mask, res.mw, res.mh, w, h, a.aiRectMode, cat, id)
 	if err != nil {
