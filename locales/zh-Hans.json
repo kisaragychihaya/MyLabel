@@ -80,6 +80,10 @@
   "@toolbarLabelsHidden": {
     "description": "The status bar, after the category chips were hidden."
   },
+  "toolStripSelect": "指针 (V)",
+  "@toolStripSelect": {
+    "description": "The tool strip's select (pointer) tool button: its accessible name and its tooltip, the tool's name and its shortcut."
+  },
   "toolStripPan": "抓手 (H)",
   "@toolStripPan": {
     "description": "The tool strip's hand tool button: its accessible name and its tooltip, the tool's name and its shortcut."

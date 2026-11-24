@@ -100,13 +100,15 @@ func (a *App) fitToCanvas(r ui.Rect) {
 }
 
 // canvasCursor is the canvas's pointer shape: a hand while panning, whether
-// Space is held in any tool or the hand tool is selected, a pointer for the
-// click-to-zoom tool, and the crosshair the annotation and marquee tools draw
-// with (docs/phase6-design.md §3).
+// Space is held in any tool or the hand tool is selected, the system arrow for
+// the pointer tool, a pointer for the click-to-zoom tool, and the crosshair the
+// creation and marquee tools draw with (docs/phase6-design.md §3, §6.2).
 func canvasCursor(tool Tool, spacePan bool) ui.Cursor {
 	switch {
 	case spacePan || tool == ToolPan:
 		return ui.CursorGrab
+	case tool == ToolSelect:
+		return ui.CursorDefault
 	case tool == ToolZoom:
 		return ui.CursorPointer
 	}

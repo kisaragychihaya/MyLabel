@@ -316,14 +316,21 @@ const (
 )
 
 // Tool is the tool the strip selects, one at a time (docs/phase6-design.md §1):
-// the three annotation tools draw rectangles (docs/phase2-design.md §4.1),
-// polygons (§4.2) and rotated boxes (§5.2); the three view tools pan, zoom and
-// select with a rectangle without touching the annotations themselves.
+// the pointer edits the annotations and the three creation tools draw new ones,
+// rectangles (docs/phase2-design.md §4.1), polygons (§4.2) and rotated boxes
+// (§5.2); the three view tools pan, zoom and select with a rectangle without
+// touching the annotations themselves.
 type Tool int
 
 const (
-	// The annotation tools come first, so the zero Tool is the default one.
-	ToolRect Tool = iota
+	// ToolSelect comes first, so the zero Tool — the one a fresh window starts
+	// with — is the pointer: it selects, moves, resizes, rotates and edits
+	// vertices, and it creates nothing (docs/phase6-design.md §6.2). Starting
+	// here keeps a press on an existing annotation from opening a new box.
+	ToolSelect Tool = iota
+	// The creation tools come next: they only ever start a new annotation,
+	// wherever the press lands (§6.2).
+	ToolRect
 	ToolPoly
 	ToolObb
 	// ToolPan drags the image with the left button, as Space does in any tool.
@@ -333,6 +340,16 @@ const (
 	// ToolMarquee drags a selection rectangle without Shift.
 	ToolMarquee
 )
+
+// isCreationTool reports whether t only starts new annotations and leaves the
+// existing ones alone (docs/phase6-design.md §6.2).
+func isCreationTool(t Tool) bool {
+	switch t {
+	case ToolRect, ToolPoly, ToolObb:
+		return true
+	}
+	return false
+}
 
 // dragState carries the in-progress drag information.
 type dragState struct {

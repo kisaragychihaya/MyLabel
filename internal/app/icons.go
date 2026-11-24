@@ -2,14 +2,15 @@ package app
 
 import "github.com/egoist/mygo/ui"
 
-// The tool strip's icons (docs/phase6-design.md §2): six hand-drawn 24×24
+// The tool strip's icons (docs/phase6-design.md §2): seven hand-drawn 24×24
 // outlines, stroked in the element's text color, so the button paints them in
 // the foreground of an ordinary button and of an active (primary) one alike.
 //
-// Each is its own drawing, drawn as outlines only: a hand for the pan tool, a
-// magnifier with a plus for the zoom tool, a dashed box for the marquee, a box
-// for the rectangle tool, a pentagon for the polygon tool and a turned box for
-// the rotated box tool. Adding a tool to the strip means adding one line here.
+// Each is its own drawing, drawn as outlines only: an arrow pointer for the
+// select tool, a hand for the pan tool, a magnifier with a plus for the zoom
+// tool, a dashed box for the marquee, a box for the rectangle tool, a pentagon
+// for the polygon tool and a turned box for the rotated box tool. Adding a tool
+// to the strip means adding one line here.
 
 // toolIcon wraps an icon's shapes in the attributes every tool icon shares:
 // 24×24, no fill, a 2 DIP round-capped currentColor stroke.
@@ -20,6 +21,9 @@ func toolIcon(shapes string) *ui.SVG {
 }
 
 var (
+	// iconToolSelect is an arrow pointer: the tool that selects what is under it.
+	iconToolSelect = toolIcon(`<path d="M4 3.5 11 20.5 13.5 13.5 20.5 11Z"/>` +
+		`<path d="M13.5 13.5 20 20"/>`)
 	// iconToolPan is a palm with three fingers up and a thumb along its side.
 	iconToolPan = toolIcon(`<path d="M9 12V6.5a1.5 1.5 0 0 1 3 0V11"/>` +
 		`<path d="M12 11V5.5a1.5 1.5 0 0 1 3 0V11"/>` +

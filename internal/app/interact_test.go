@@ -117,6 +117,16 @@ func dragImage(t *testing.T, a *App, tt *ui.Tester, from, to Point) {
 	tt.Release(x1, y1)
 }
 
+// drawRect drags out a rectangle with the rectangle tool. Creating belongs to the
+// creation tools alone — the pointer tool a fresh window starts with creates
+// nothing (docs/phase6-design.md §6.1, §6.2) — so a test that draws names its
+// tool; a test that then edits adds setTool(ToolSelect) and clicks the body.
+func drawRect(t *testing.T, a *App, tt *ui.Tester, from, to Point) {
+	t.Helper()
+	a.setTool(ToolRect)
+	dragImage(t, a, tt, from, to)
+}
+
 // clickImage clicks image point p without dragging.
 func clickImage(t *testing.T, a *App, tt *ui.Tester, p Point) {
 	t.Helper()
@@ -210,7 +220,11 @@ func TestAnnAndHandlesAreDrawn(t *testing.T) {
 	a, tt := tester(t)
 	a.bmp = markerImage()
 	tt.Frame()
-	dragImage(t, a, tt, Point{150, 150}, Point{350, 300})
+	drawRect(t, a, tt, Point{150, 150}, Point{350, 300})
+	// The pointer tool is what selects an annotation, and the handles are only
+	// drawn for a selection (docs/phase6-design.md §6.2).
+	a.setTool(ToolSelect)
+	clickImage(t, a, tt, Point{250, 225})
 	if a.soleSelection() != 0 {
 		t.Fatalf("soleSelection = %d, want 0", a.soleSelection())
 	}
@@ -291,7 +305,7 @@ func TestDragCreatesAnnotation(t *testing.T) {
 			a.panX, a.panY = tc.pan.X, tc.pan.Y
 			tt.Frame()
 
-			dragImage(t, a, tt, tc.from, tc.to)
+			drawRect(t, a, tt, tc.from, tc.to)
 
 			got := anns(a)
 			if len(got) != 1 {
@@ -314,8 +328,10 @@ func TestDragCreatesAnnotation(t *testing.T) {
 			if an.ID == "" {
 				t.Error("annotation has no ID")
 			}
-			if a.soleSelection() != 0 {
-				t.Errorf("soleSelection = %d, want 0 (new annotation selected)", a.soleSelection())
+			// A creation tool leaves its new annotation unselected: editing is
+			// the pointer tool's (docs/phase6-design.md §6.2).
+			if a.selectionCount() != 0 {
+				t.Errorf("selectionCount = %d after creating, want 0", a.selectionCount())
 			}
 
 			a.undo()
@@ -329,7 +345,9 @@ func TestDragCreatesAnnotation(t *testing.T) {
 // TestSelectMoveUndo is design §9 item 2 (and part of item 5).
 func TestSelectMoveUndo(t *testing.T) {
 	a, tt := tester(t)
-	dragImage(t, a, tt, Point{100, 100}, Point{300, 250})
+	drawRect(t, a, tt, Point{100, 100}, Point{300, 250})
+	// The pointer tool is the editing half: select, move, undo (§6.2).
+	a.setTool(ToolSelect)
 
 	// Click empty canvas: deselect, no annotation created (a click, not a drag).
 	clickImage(t, a, tt, Point{600, 450})
@@ -376,7 +394,9 @@ func TestSelectMoveUndo(t *testing.T) {
 // Shift snaps it to 15°.
 func TestResizeAndRotate(t *testing.T) {
 	a, tt := tester(t)
-	dragImage(t, a, tt, Point{100, 100}, Point{300, 250})
+	drawRect(t, a, tt, Point{100, 100}, Point{300, 250})
+	a.setTool(ToolSelect)
+	clickImage(t, a, tt, Point{200, 175})
 	an := anns(a)[0]
 	if a.soleSelection() != 0 {
 		t.Fatalf("soleSelection = %d, want 0", a.soleSelection())
@@ -433,7 +453,9 @@ func TestResizeAndRotate(t *testing.T) {
 // TestDeleteUndo is design §9 item 5.
 func TestDeleteUndo(t *testing.T) {
 	a, tt := tester(t)
-	dragImage(t, a, tt, Point{100, 100}, Point{300, 250})
+	drawRect(t, a, tt, Point{100, 100}, Point{300, 250})
+	a.setTool(ToolSelect)
+	clickImage(t, a, tt, Point{200, 175})
 	if a.soleSelection() != 0 {
 		t.Fatalf("soleSelection = %d, want 0", a.soleSelection())
 	}
@@ -714,6 +736,7 @@ func TestCtrlScrollAnchorsImageCenter(t *testing.T) {
 // TestEscapeCancelsCreate is design §9 item 6.
 func TestEscapeCancelsCreate(t *testing.T) {
 	a, tt := tester(t)
+	a.setTool(ToolRect)
 	cv := canvasBounds(t, tt)
 	x0, y0 := screenOf(cv, a, Point{100, 100})
 	x1, y1 := screenOf(cv, a, Point{300, 250})
@@ -740,7 +763,9 @@ func TestEscapeCancelsCreate(t *testing.T) {
 // TestCategoryKeys is design §9 item 7.
 func TestCategoryKeys(t *testing.T) {
 	a, tt := tester(t)
-	dragImage(t, a, tt, Point{100, 100}, Point{300, 250})
+	drawRect(t, a, tt, Point{100, 100}, Point{300, 250})
+	a.setTool(ToolSelect)
+	clickImage(t, a, tt, Point{200, 175})
 	if a.soleSelection() != 0 {
 		t.Fatalf("soleSelection = %d, want 0", a.soleSelection())
 	}
@@ -762,7 +787,7 @@ func TestCategoryKeys(t *testing.T) {
 	if a.curCat != 4 {
 		t.Errorf("curCat = %d after key 5 with no selection, want 4", a.curCat)
 	}
-	dragImage(t, a, tt, Point{400, 300}, Point{500, 380})
+	drawRect(t, a, tt, Point{400, 300}, Point{500, 380})
 	got := anns(a)
 	if len(got) != 2 {
 		t.Fatalf("annotations = %d, want 2", len(got))
@@ -776,6 +801,7 @@ func TestCategoryKeys(t *testing.T) {
 // labelme-style hand tool) and never creates an annotation.
 func TestSpaceDragPans(t *testing.T) {
 	a, tt := tester(t)
+	a.setTool(ToolRect)
 	a.bmp = markerImage()
 	a.imgW, a.imgH = 800, 600
 	a.zoom, a.panX, a.panY = 1, 0, 0

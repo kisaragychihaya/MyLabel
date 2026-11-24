@@ -20,6 +20,10 @@
   "toolbarShortcutHint": "Keys 1-9 change the category, a double click edits the attributes, Ctrl+D marks the image done, A/D move between images, Ctrl+B carries the previous labels over",
   "toolbarLabelsShown": "Category chips shown",
   "toolbarLabelsHidden": "Category chips hidden",
+  "toolStripSelect": "Select (V)",
+  "@toolStripSelect": {
+    "description": "The tool strip's select (pointer) tool button: its accessible name and its tooltip, the tool's name and its shortcut."
+  },
   "toolStripPan": "Hand (H)",
   "@toolStripPan": {
     "description": "The tool strip's hand tool button: its accessible name and its tooltip, the tool's name and its shortcut."

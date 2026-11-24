@@ -97,8 +97,8 @@ func toolIcons() []struct {
 // TestToolIconsParse: every tool has its own 24×24 outline, and none of them
 // carries an SVG feature the renderer would have to skip.
 func TestToolIconsParse(t *testing.T) {
-	if len(toolSpecs) != 6 {
-		t.Fatalf("工具条有 %d 个工具，期望 6 个", len(toolSpecs))
+	if len(toolSpecs) != 7 {
+		t.Fatalf("工具条有 %d 个工具，期望 7 个", len(toolSpecs))
 	}
 	seen := map[*ui.SVG]string{}
 	for _, icon := range toolIcons() {
@@ -183,19 +183,20 @@ func TestToolStripLayout(t *testing.T) {
 			t.Errorf("%s: 按钮右边界 %v 覆盖画布起点 %v", toolSpecs[i].key, r.X+r.W, cv.X)
 		}
 	}
-	// The divider sits between the third and the fourth button, so that gap is
-	// wider than the plain gap between two buttons.
-	gap := rects[3].Y - (rects[2].Y + rects[2].H)
+	// The divider sits between the pointer and view tools and the creation ones,
+	// so that gap is wider than the plain gap between two buttons.
+	i := toolStripDividerAfter
+	gap := rects[i].Y - (rects[i-1].Y + rects[i-1].H)
 	plain := rects[1].Y - (rects[0].Y + rects[0].H)
 	if gap <= plain+4 {
-		t.Errorf("视图工具与创建工具之间只有 %v DIP 的间距，普通间距 %v：缺少分隔线", gap, plain)
+		t.Errorf("指针/视图工具与创建工具之间只有 %v DIP 的间距，普通间距 %v：缺少分隔线", gap, plain)
 	}
 
-	// The default tool is the rectangle one; its button shows the accent, the
+	// The default tool is the pointer one; its button shows the accent, the
 	// others show the surface the strip is made of.
 	frame := tt.Image()
-	if a.tool != ToolRect {
-		t.Fatalf("默认工具 = %v，期望 ToolRect", a.tool)
+	if a.tool != ToolSelect {
+		t.Fatalf("默认工具 = %v，期望 ToolSelect", a.tool)
 	}
 	for i, r := range rects {
 		// A point inside the button's face, left of its centered 18 DIP icon.
@@ -363,8 +364,9 @@ func TestToolStripButtons(t *testing.T) {
 	}
 }
 
-// TestToolStripShortcuts: H, Z and M reach the three view tools; R, P and O keep
-// theirs; a modifier or a gesture in progress keeps the current tool.
+// TestToolStripShortcuts: V reaches the pointer tool, H, Z and M the three view
+// tools, R, P and O the creation ones; a modifier or a gesture in progress keeps
+// the current tool.
 func TestToolStripShortcuts(t *testing.T) {
 	a := newTestApp()
 	a.zoom, a.panX, a.panY = 1, 0, 0
@@ -373,6 +375,7 @@ func TestToolStripShortcuts(t *testing.T) {
 		key  ui.Key
 		want Tool
 	}{
+		{ui.KeyV, ToolSelect},
 		{ui.KeyH, ToolPan},
 		{ui.KeyZ, ToolZoom},
 		{ui.KeyM, ToolMarquee},
@@ -401,6 +404,7 @@ func TestToolStripShortcuts(t *testing.T) {
 		{"Ctrl+Z 是撤销", ui.KeyZ, ui.Ctrl},
 		{"Shift+H 不是抓手", ui.KeyH, ui.Shift},
 		{"Alt+M 不是选框", ui.KeyM, ui.Alt},
+		{"Alt+V 不是指针", ui.KeyV, ui.Alt},
 	} {
 		a.tool = ToolRect
 		keyWith(a, tc.key, tc.mods)
@@ -476,8 +480,8 @@ func TestToolSwitchDropsDraft(t *testing.T) {
 }
 
 // TestCanvasCursor: the hand shows over the pan tool and while Space pans, the
-// pointer over the zoom tool, and the crosshair for everything that draws or
-// selects.
+// arrow over the pointer tool, the pointer over the zoom tool, and the crosshair
+// for everything that draws or selects a rectangle.
 func TestCanvasCursor(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -487,6 +491,7 @@ func TestCanvasCursor(t *testing.T) {
 	}{
 		{"hand tool", ToolPan, false, ui.CursorGrab},
 		{"space pans in any tool", ToolRect, true, ui.CursorGrab},
+		{"select tool", ToolSelect, false, ui.CursorDefault},
 		{"zoom tool", ToolZoom, false, ui.CursorPointer},
 		{"marquee tool", ToolMarquee, false, ui.CursorCrosshair},
 		{"rect tool", ToolRect, false, ui.CursorCrosshair},
@@ -504,8 +509,9 @@ func TestCanvasCursor(t *testing.T) {
 // it does.
 func TestToolStripLabels(t *testing.T) {
 	want := []string{
-		locales.ToolStripPan(), locales.ToolStripZoom(), locales.ToolStripMarquee(),
-		locales.ToolStripRect(), locales.ToolStripPoly(), locales.ToolStripObb(),
+		locales.ToolStripSelect(), locales.ToolStripPan(), locales.ToolStripZoom(),
+		locales.ToolStripMarquee(), locales.ToolStripRect(), locales.ToolStripPoly(),
+		locales.ToolStripObb(),
 	}
 	if len(toolSpecs) != len(want) {
 		t.Fatalf("工具条有 %d 个按钮，期望 %d 个", len(toolSpecs), len(want))

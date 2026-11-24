@@ -204,7 +204,7 @@ func TestShiftMarqueeInEveryTool(t *testing.T) {
 	a := threeRects(t)
 	a.zoom, a.panX, a.panY = 1, 0, 0
 
-	for _, tool := range []Tool{ToolPan, ToolZoom, ToolMarquee, ToolRect, ToolPoly, ToolObb} {
+	for _, tool := range []Tool{ToolSelect, ToolPan, ToolZoom, ToolMarquee, ToolRect, ToolPoly, ToolObb} {
 		a.tool = tool
 		a.mode = ModeIdle
 		a.clearSelection()
@@ -220,7 +220,7 @@ func TestShiftMarqueeInEveryTool(t *testing.T) {
 }
 
 // TestChipAndZMenuWorkInEveryTool: a category chip and a right click stay
-// reachable in all six tools — the chip selects its annotation (a double-click
+// reachable in all seven tools — the chip selects its annotation (a double-click
 // opens the category picker) and the right button opens the z-order menu,
 // whatever the tool would otherwise do with the press.
 func TestChipAndZMenuWorkInEveryTool(t *testing.T) {
@@ -237,7 +237,7 @@ func TestChipAndZMenuWorkInEveryTool(t *testing.T) {
 	}
 	cx, cy := chip.X+chip.W/2-cv.X, chip.Y+chip.H/2-cv.Y
 
-	for _, tool := range []Tool{ToolPan, ToolZoom, ToolMarquee, ToolRect, ToolPoly, ToolObb} {
+	for _, tool := range []Tool{ToolSelect, ToolPan, ToolZoom, ToolMarquee, ToolRect, ToolPoly, ToolObb} {
 		a.tool = tool
 		a.mode = ModeIdle
 		a.clearSelection()

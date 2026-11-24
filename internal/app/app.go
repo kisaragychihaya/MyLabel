@@ -409,7 +409,7 @@ func (a *App) openDir(dir string) {
 	a.zoom = 1
 	a.panX, a.panY = 0, 0
 	a.mode = ModeIdle
-	a.tool = ToolRect
+	a.tool = ToolSelect
 	a.polyDraft = nil
 	a.hasHover = false
 	a.undoStack = nil

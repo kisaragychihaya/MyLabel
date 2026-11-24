@@ -6,10 +6,11 @@ import (
 	"mylabel/locales"
 )
 
-// The left tool strip (docs/phase6-design.md §2): a Photoshop-style column of
-// square icon buttons, one per tool, the active one highlighted. The view tools
-// (hand, zoom, marquee) sit above a divider, the annotation tools below it; a
-// new tool joins the strip by joining toolSpecs.
+// The left tool strip (docs/phase6-design.md §2, §6.1): a Photoshop-style column
+// of square icon buttons, one per tool, the active one highlighted. The pointer
+// tool and the view tools (hand, zoom, marquee) sit above a divider, the creation
+// tools (rectangle, polygon, rotated box) below it; a new tool joins the strip by
+// joining toolSpecs.
 
 const (
 	// toolStripWidth is the strip's fixed width, in DIP: one icon button plus the
@@ -20,8 +21,8 @@ const (
 	toolButtonDIP = 32
 	toolIconDIP   = 18
 	// toolStripDividerAfter is the index in toolSpecs the divider follows: the
-	// three view tools, then the annotation tools.
-	toolStripDividerAfter = 3
+	// pointer and the three view tools, then the creation tools.
+	toolStripDividerAfter = 4
 )
 
 // toolSpec is one button of the strip. text returns the button's accessible name
@@ -53,6 +54,7 @@ func zoomToolIcon(a *App) *ui.SVG {
 
 // toolSpecs lists the strip's buttons from top to bottom.
 var toolSpecs = []toolSpec{
+	{ToolSelect, "toolSelect", fixedIcon(iconToolSelect), locales.ToolStripSelect},
 	{ToolPan, "toolPan", fixedIcon(iconToolPan), locales.ToolStripPan},
 	{ToolZoom, "toolZoom", zoomToolIcon, locales.ToolStripZoom},
 	{ToolMarquee, "toolMarquee", fixedIcon(iconToolMarquee), locales.ToolStripMarquee},

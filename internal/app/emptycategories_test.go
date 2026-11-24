@@ -170,7 +170,7 @@ func TestFirstCategoryEnablesCreation(t *testing.T) {
 	if a.curCat != 0 {
 		t.Fatalf("curCat = %d，期望 0", a.curCat)
 	}
-	dragImage(t, a, tt, Point{100, 100}, Point{300, 250})
+	drawRect(t, a, tt, Point{100, 100}, Point{300, 250})
 	got := anns(a)
 	if len(got) != 1 {
 		t.Fatalf("添加类别后写了 %d 条标注，期望 1：%s", len(got), a.lastStatus)

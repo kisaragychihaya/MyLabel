@@ -124,8 +124,10 @@ func TestObbToolCreatesRotatedBox(t *testing.T) {
 	if a.mode != ModeIdle || len(a.polyDraft) != 0 {
 		t.Errorf("成框后 mode = %v、草稿 %v，期望空闲且没有草稿", a.mode, a.polyDraft)
 	}
-	if a.soleSelection() != 0 {
-		t.Errorf("成框后 soleSelection = %d，期望 0（新框被选中）", a.soleSelection())
+	// A creation tool leaves the box unselected: the pointer tool is where it is
+	// picked up again (docs/phase6-design.md §6.2).
+	if a.selectionCount() != 0 {
+		t.Errorf("成框后 selectionCount = %d，期望 0", a.selectionCount())
 	}
 	// One undo removes the whole box.
 	a.undo()
@@ -279,12 +281,12 @@ func TestObbDraftIgnoresEnterAndCloseClick(t *testing.T) {
 	}
 }
 
-// TestObbToolButtonAndKey pins the toolbar's third tool and its shortcut: R and
-// P still switch back.
+// TestObbToolButtonAndKey pins the rotated box tool's shortcut: R and P still
+// switch back, and the window starts on the pointer tool.
 func TestObbToolButtonAndKey(t *testing.T) {
 	a := newTestApp()
-	if a.tool != ToolRect {
-		t.Fatalf("初始 tool = %v，期望 ToolRect", a.tool)
+	if a.tool != ToolSelect {
+		t.Fatalf("初始 tool = %v，期望 ToolSelect", a.tool)
 	}
 	a.handleCanvasInput(ui.Element{}, polyKey(ui.KeyO))
 	if a.tool != ToolObb {
@@ -316,8 +318,10 @@ func TestObbBoxIsEditableLikeAnyRect(t *testing.T) {
 	}
 	// The rotate handle sits above the top edge midpoint along the box's own
 	// axis; dragging it re-angles the box as for any rectangle (§5.2: obb 编辑
-	// 不变).
-	before := got[0]
+	// 不变). Handles belong to the pointer tool, so the box is selected with it.
+	a.setTool(ToolSelect)
+	clickImage(t, a, tt, Point{150, 130})
+	before := anns(a)[0]
 	hs := handlePoints(&before, safeZoom(a.zoom))
 	if hs[8].Y >= before.CY {
 		t.Fatalf("旋转柄位置异常: %+v", hs[8])

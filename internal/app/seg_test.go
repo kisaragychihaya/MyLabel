@@ -195,8 +195,9 @@ func TestPolyCreateByClicksAndCloseOnFirstVertex(t *testing.T) {
 	if got[0].ID == "" {
 		t.Error("created polygon has no ID")
 	}
-	if a.soleSelection() != 0 {
-		t.Errorf("soleSelection = %d after closing, want 0 (the new polygon)", a.soleSelection())
+	// A creation tool leaves the polygon unselected (docs/phase6-design.md §6.2).
+	if a.selectionCount() != 0 {
+		t.Errorf("selectionCount = %d after closing, want 0", a.selectionCount())
 	}
 
 	a.undo()
@@ -238,8 +239,9 @@ func TestPolyCreateWithTester(t *testing.T) {
 		t.Fatalf("annotations = %d after closing, want 1", len(got))
 	}
 	polyWantPointsNear(t, "created", got[0], pts, 0.5)
-	if a.soleSelection() != 0 {
-		t.Errorf("soleSelection = %d, want the new polygon selected", a.soleSelection())
+	// A creation tool leaves the polygon unselected (docs/phase6-design.md §6.2).
+	if a.selectionCount() != 0 {
+		t.Errorf("selectionCount = %d, want the new polygon unselected", a.selectionCount())
 	}
 }
 
@@ -404,6 +406,7 @@ func TestPolyDraftKeepsWorldVerticesThroughPanAndZoom(t *testing.T) {
 func TestPolyToolLeavesRectCreationAlone(t *testing.T) {
 	// ToolRect: a drag still creates a rectangle, tagged KindRect.
 	a := newTestApp()
+	a.setTool(ToolRect)
 	dragAll(a, Point{100, 100}, Point{300, 250})
 	got := anns(a)
 	if len(got) != 1 {
@@ -740,8 +743,8 @@ func TestPolyDraftIsDrawn(t *testing.T) {
 
 func TestToolShortcuts(t *testing.T) {
 	a := newTestApp()
-	if a.tool != ToolRect {
-		t.Fatalf("default tool = %v, want ToolRect", a.tool)
+	if a.tool != ToolSelect {
+		t.Fatalf("default tool = %v, want ToolSelect", a.tool)
 	}
 	if !a.handleCanvasInput(ui.Element{}, polyKey(ui.KeyP)) {
 		t.Fatal("P was not consumed")
@@ -752,6 +755,10 @@ func TestToolShortcuts(t *testing.T) {
 	a.handleCanvasInput(ui.Element{}, polyKey(ui.KeyR))
 	if a.tool != ToolRect {
 		t.Fatalf("tool = %v after R, want ToolRect", a.tool)
+	}
+	a.handleCanvasInput(ui.Element{}, polyKey(ui.KeyV))
+	if a.tool != ToolSelect {
+		t.Fatalf("tool = %v after V, want ToolSelect", a.tool)
 	}
 
 	// Switching away from the polygon tool drops the draft in progress.

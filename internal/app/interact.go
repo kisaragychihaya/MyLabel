@@ -80,13 +80,14 @@ func (a *App) pointerImage(x, y float32) Point {
 // button (left), 1 the secondary one (right) and 2 the middle one
 // (ui.InputEvent.Button).
 //
-// The annotation tool decides what a left click on empty canvas does: with
-// ToolRect it starts a rubber-band box, with ToolPoly it starts (or extends) a
-// polygon draft; Shift turns that click-and-drag into a marquee selection
-// instead (§5). Clicking an existing annotation selects it either way, so a
-// polygon stays selectable — and therefore editable — while ToolPoly is active.
-// A right click opens the annotation's z-order menu instead, and a click on a
-// category chip selects — or, double-clicked, re-categorizes — its annotation.
+// The tool decides what a left press does (docs/phase6-design.md §6.2): the
+// pointer tool selects the annotation under it, moves it, drags its handles and
+// vertices; the creation tools always start a new annotation, whether the press
+// landed on empty canvas or on an existing one; the hand pans, the zoom tool arms
+// one click and the marquee drags a selection rectangle. Shift turns a press on
+// empty canvas into that marquee in every tool (§5). A right click opens the
+// annotation's z-order menu instead, and a click on a category chip selects — or,
+// double-clicked, re-categorizes — its annotation, in every tool.
 func (a *App) pointerDown(ev ui.InputEvent) bool {
 	// A z-order menu is a panel of its own: the press that dismisses it must not
 	// also select, clear or create anything behind it. The popover closes itself
@@ -142,24 +143,27 @@ func (a *App) pointerDown(ev ui.InputEvent) bool {
 		ctrl := ev.Mods&ui.Ctrl != 0
 		shift := ev.Mods&ui.Shift != 0
 
-		// The view tools take the press before the annotation hit test: the hand
-		// pans, the zoom tool arms one click and the marquee drags a selection
-		// rectangle. Shift keeps its old meaning in every tool — a Shift+drag on
-		// empty canvas marks a marquee — so the hand and the zoom tool stand aside
-		// for it and the legacy paths below take the press; the marquee tool
-		// already is that gesture and ignores Shift. The chip check above runs
-		// first, so a chip stays clickable in every tool (docs/phase6-design.md §3).
+		// The view tools and the creation tools take the press before the
+		// annotation hit test: the hand pans, the zoom tool arms one click, the
+		// marquee drags a selection rectangle and the creation tools always start
+		// a new annotation — a press on an existing one creates too, it does not
+		// select or move it (docs/phase6-design.md §6.2). Only the pointer tool
+		// reaches the editing half below. Shift keeps its old meaning — a
+		// Shift+drag on empty canvas marks a marquee — in every tool, so it is
+		// checked before the tool switch and released again to the editing half
+		// when it lands on an annotation. The chip check above runs first, so a
+		// chip stays clickable in every tool (§3, §6.2).
+		onAnn := hitTestAnns(img.Anns, -1, p, a.zoom).Kind != HitNone
 		switch {
 		case a.tool == ToolMarquee:
 			// Shift+drag's path, without needing Shift and whatever is under the
 			// pointer: the release selects what the rectangle touches (§5).
-			a.mode = ModeMarquee
-			a.drag = dragState{annIndex: -1, handle: -1, start: p}
-			a.hover, a.hasHover = p, true
+			a.startMarquee(p)
 			return true
-		case shift:
-			// The legacy gestures below: a marquee on empty canvas, a selection or
-			// a move on an annotation.
+		case shift && !onAnn:
+			// Empty canvas in any tool: a marquee instead of a create or an edit.
+			a.startMarquee(p)
+			return true
 		case a.tool == ToolPan:
 			// The same panning ModePan and Space use; start holds canvas DIP.
 			a.mode = ModePan
@@ -168,6 +172,10 @@ func (a *App) pointerDown(ev ui.InputEvent) bool {
 		case a.tool == ToolZoom:
 			a.mode = ModeZoomClick
 			a.drag = dragState{annIndex: -1, handle: -1, start: Point{X: float64(ev.X), Y: float64(ev.Y)}}
+			return true
+		case isCreationTool(a.tool):
+			// A pure create: the annotation under the pointer, if any, is ignored.
+			a.startCreate(p)
 			return true
 		}
 
@@ -217,36 +225,44 @@ func (a *App) pointerDown(ev ui.InputEvent) bool {
 				a.drag.clickProps = ev.Clicks >= 2
 			}
 		default:
-			// Empty canvas: Shift+drag selects with a rectangle, a plain drag
-			// creates an annotation (§5). Both start by dropping the old
-			// selection, and a click without a drag leaves nothing selected.
-			if shift {
-				a.mode = ModeMarquee
-				a.drag = dragState{annIndex: -1, handle: -1, start: p}
-				a.hover, a.hasHover = p, true
-				return true
-			}
+			// Empty canvas under the pointer tool: a click without a drag leaves
+			// nothing selected. Creating is the creation tools' alone (§6.2), and
+			// Shift on empty canvas never reaches here — it opens a marquee above.
 			a.clearSelection()
-			// Creating needs a category to give the annotation: an empty panel
-			// blocks all three tools instead of making a category-less
-			// annotation (contract §3). A draft in progress is unaffected — the
-			// list cannot empty under it, since a category in use cannot be
-			// deleted.
-			if len(a.categories) == 0 {
-				a.lastStatus = locales.StatusNoCategories()
-				return true
-			}
-			if a.tool == ToolPoly || a.tool == ToolObb {
-				a.startPolyDraft(p)
-				return true
-			}
-			a.mode = ModeCreating
-			a.draft = Ann{ID: newAnnID(), Cat: a.curCat, Kind: KindRect, CX: p.X, CY: p.Y}
-			a.drag = dragState{annIndex: -1, handle: -1, start: p}
 		}
 		return true
 	}
 	return false
+}
+
+// startMarquee begins a ModeMarquee drag at image point p: a Shift+drag on empty
+// canvas in any tool, or any drag of the marquee tool (docs/phase6-design.md §3,
+// §6.2). The release selects every annotation the rectangle touches.
+func (a *App) startMarquee(p Point) {
+	a.mode = ModeMarquee
+	a.drag = dragState{annIndex: -1, handle: -1, start: p}
+	a.hover, a.hasHover = p, true
+}
+
+// startCreate begins a new annotation at image point p, whatever is under the
+// pointer: the rubber band of ToolRect, the vertex-by-vertex draft of ToolPoly
+// and ToolObb (docs/phase6-design.md §6.2). Creating needs a category to give the
+// annotation: an empty panel blocks all three tools instead of making a
+// category-less annotation (contract §3). A draft in progress is unaffected — the
+// list cannot empty under it, since a category in use cannot be deleted.
+func (a *App) startCreate(p Point) {
+	a.clearSelection()
+	if len(a.categories) == 0 {
+		a.lastStatus = locales.StatusNoCategories()
+		return
+	}
+	if a.tool == ToolPoly || a.tool == ToolObb {
+		a.startPolyDraft(p)
+		return
+	}
+	a.mode = ModeCreating
+	a.draft = Ann{ID: newAnnID(), Cat: a.curCat, Kind: KindRect, CX: p.X, CY: p.Y}
+	a.drag = dragState{annIndex: -1, handle: -1, start: p}
 }
 
 // startGroupMove begins a ModeMove drag at image point p with every selected
@@ -474,10 +490,10 @@ func (a *App) pointerUp(ev ui.InputEvent) bool {
 		if d.W < 2 || d.H < 2 {
 			return true
 		}
+		// The new annotation is left unselected: only the creation tools get here
+		// (docs/phase6-design.md §6.2), and they keep no selection — the pointer
+		// tool is where an annotation is picked up again.
 		a.push(cmdCreate(a, a.loaded, d))
-		if img := a.curImage(); img != nil && len(img.Anns) > 0 {
-			a.selectOnly(len(img.Anns) - 1)
-		}
 		return true
 
 	case ModeMarquee:
@@ -615,10 +631,10 @@ func (a *App) keyDown(ev ui.InputEvent) bool {
 	if ev.Mods&ui.Ctrl != 0 && ev.Key == ui.KeyB {
 		return a.carryPrevImage()
 	}
-	// A/D switch images, F refits the view, H/Z/M pick a tool: only without
+	// A/D switch images, F refits the view, V/H/Z/M pick a tool: only without
 	// modifiers, so the Ctrl+A/Ctrl+D/Ctrl+Z combinations above and in View keep
-	// their single meaning (docs/phase6-design.md §1). Z, like the strip's zoom
-	// button, flips the zoom direction once that tool is active.
+	// their single meaning (docs/phase6-design.md §1, §6.1). Z, like the strip's
+	// zoom button, flips the zoom direction once that tool is active.
 	if ev.Mods == 0 {
 		switch ev.Key {
 		case ui.KeyA:
@@ -627,6 +643,9 @@ func (a *App) keyDown(ev ui.InputEvent) bool {
 			return a.goImage(1)
 		case ui.KeyF:
 			return a.fitWindow()
+		case ui.KeyV:
+			a.chooseTool(ToolSelect)
+			return true
 		case ui.KeyH:
 			a.chooseTool(ToolPan)
 			return true
@@ -876,12 +895,20 @@ func (a *App) setTool(t Tool) {
 	if t == ToolZoom {
 		a.zoomOutNext = false
 	}
+	// A creation tool neither draws handles nor answers Delete or the number
+	// keys, so a selection would be invisible there and half-alive: it is dropped
+	// on the way in (docs/phase6-design.md §6.2). Moving between the pointer, the
+	// marquee and the view tools keeps it, which is why the drop belongs here
+	// rather than in every switch.
+	if isCreationTool(t) {
+		a.clearSelection()
+	}
 }
 
 // startPolyDraft begins a click-by-click draft at image point p: ToolPoly's
-// click on empty canvas (docs/phase2-design.md §4.2), or ToolObb's, which
-// collects the four corners of a rotated box the same way (§5.2). The draft's
-// Kind is the kind the finished annotation will have.
+// click, wherever it lands (docs/phase2-design.md §4.2, phase6-design.md §6.2),
+// or ToolObb's, which collects the four corners of a rotated box the same way
+// (§5.2). The draft's Kind is the kind the finished annotation will have.
 func (a *App) startPolyDraft(p Point) {
 	if len(a.categories) == 0 {
 		a.lastStatus = locales.StatusNoCategories()
@@ -934,8 +961,9 @@ func (a *App) nearDraftStart(p Point) bool {
 	return distance(p, a.polyDraft[0])*safeZoom(a.zoom) <= polyCloseSnapDIP
 }
 
-// closePolyDraft commits the draft as a polygon annotation and selects it. A
-// draft of fewer than three vertices is not closable and stays open.
+// closePolyDraft commits the draft as a polygon annotation, unselected as any
+// annotation a creation tool makes (docs/phase6-design.md §6.2). A draft of
+// fewer than three vertices is not closable and stays open.
 func (a *App) closePolyDraft() bool {
 	pts := a.polyDraft
 	if len(pts) < minPolyVertices {
@@ -949,9 +977,6 @@ func (a *App) closePolyDraft() bool {
 	a.draft = Ann{}
 	a.mode = ModeIdle
 	a.push(cmdCreate(a, a.loaded, ann))
-	if img := a.curImage(); img != nil && len(img.Anns) > 0 {
-		a.selectOnly(len(img.Anns) - 1)
-	}
 	return true
 }
 
@@ -962,8 +987,7 @@ func (a *App) cancelPolyDraft() {
 	a.mode = ModeIdle
 }
 
-// closeObbDraft turns the four clicked corners into a rotated rectangle and
-// selects it (§5.2). A draft the four clicks did not give an area for is
+// closeObbDraft turns the four clicked corners into a rotated rectangle (§5.2). A draft the four clicks did not give an area for is
 // dropped, as a too-small rectangle drag is, and the reason is reported.
 func (a *App) closeObbDraft() bool {
 	pts := a.polyDraft
@@ -985,9 +1009,6 @@ func (a *App) closeObbDraft() bool {
 	a.draft = Ann{}
 	a.mode = ModeIdle
 	a.push(cmdCreate(a, a.loaded, box))
-	if img := a.curImage(); img != nil && len(img.Anns) > 0 {
-		a.selectOnly(len(img.Anns) - 1)
-	}
 	return true
 }
 

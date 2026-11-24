@@ -314,6 +314,22 @@ func (msgs Messages) ToolbarLabelsHidden() string {
 	return Catalog.Format(msgs.locale, "toolbarLabelsHidden", nil)
 }
 
+// ToolStripSelect says "指针 (V)"
+// in the language the app shows.
+//
+// The tool strip's select (pointer) tool button: its accessible name and
+// its tooltip, the tool's name and its shortcut.
+func ToolStripSelect() string { return In(i18n.Locale()).ToolStripSelect() }
+
+// ToolStripSelect says "指针 (V)"
+// in the language of msgs.
+//
+// The tool strip's select (pointer) tool button: its accessible name and
+// its tooltip, the tool's name and its shortcut.
+func (msgs Messages) ToolStripSelect() string {
+	return Catalog.Format(msgs.locale, "toolStripSelect", nil)
+}
+
 // ToolStripPan says "抓手 (H)"
 // in the language the app shows.
 //
