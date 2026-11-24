@@ -64,22 +64,6 @@
   "@toolbarExportDataset": {
     "description": "The toolbar button that opens the export wizard."
   },
-  "toolbarTools": "工具:",
-  "@toolbarTools": {
-    "description": "The label before the annotation tool buttons."
-  },
-  "toolbarToolRect": "矩形 (R)",
-  "@toolbarToolRect": {
-    "description": "The toolbar button of the rectangle tool."
-  },
-  "toolbarToolPoly": "多边形 (P)",
-  "@toolbarToolPoly": {
-    "description": "The toolbar button of the polygon tool."
-  },
-  "toolbarToolObb": "旋转框 (O)",
-  "@toolbarToolObb": {
-    "description": "The toolbar button of the rotated box tool."
-  },
   "toolbarLabels": "标签 (L)",
   "@toolbarLabels": {
     "description": "The toolbar button that shows or hides the category chips on the canvas."
@@ -95,6 +79,30 @@
   "toolbarLabelsHidden": "已隐藏类别标签",
   "@toolbarLabelsHidden": {
     "description": "The status bar, after the category chips were hidden."
+  },
+  "toolStripPan": "抓手 (H)",
+  "@toolStripPan": {
+    "description": "The tool strip's hand tool button: its accessible name and its tooltip, the tool's name and its shortcut."
+  },
+  "toolStripZoom": "缩放 (Z)",
+  "@toolStripZoom": {
+    "description": "The tool strip's zoom tool button: its accessible name and its tooltip, the tool's name and its shortcut."
+  },
+  "toolStripMarquee": "选框 (M)",
+  "@toolStripMarquee": {
+    "description": "The tool strip's marquee tool button: its accessible name and its tooltip, the tool's name and its shortcut."
+  },
+  "toolStripRect": "矩形 (R)",
+  "@toolStripRect": {
+    "description": "The tool strip's rectangle tool button: its accessible name and its tooltip, the tool's name and its shortcut."
+  },
+  "toolStripPoly": "多边形 (P)",
+  "@toolStripPoly": {
+    "description": "The tool strip's polygon tool button: its accessible name and its tooltip, the tool's name and its shortcut."
+  },
+  "toolStripObb": "旋转框 (O)",
+  "@toolStripObb": {
+    "description": "The tool strip's rotated box tool button: its accessible name and its tooltip, the tool's name and its shortcut."
   },
   "statusOpened": "{layout, select, widen {检测到 YOLO 数据集布局，已改为打开数据集根，} other {}}已打开 {dir}（{images, plural, other {# 张图片}}）{rotated, plural, =0 {} other {，已转正 # 张}}{migrated, plural, =0 {} other {，已迁移旧 JSON 标注 # 张}}{imported, plural, =0 {} other {，已导入 IR 项目 # 张图片}}{importedAnns, plural, =0 {} other { # 条标注}}{newCategories, plural, =0 {} other {（新建类别 # 个）}}{skippedAnns, plural, =0 {} other {，# 条标注无法转换已跳过}}",
   "@statusOpened": {

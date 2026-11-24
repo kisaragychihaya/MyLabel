@@ -304,21 +304,34 @@ const (
 	// on the first vertex or a double-click closes it, docs/phase2-design.md
 	// §4.2), or a rotated box, whose fourth click makes it (§5.2).
 	ModePolyCreate
-	// ModeMarquee drags a selection rectangle over empty canvas with Shift
-	// held; releasing selects every annotation whose box it touches
-	// (docs/phase2-design.md §5).
+	// ModeMarquee drags a selection rectangle over the canvas: Shift+drag starts
+	// one on empty canvas in any tool, and the marquee tool starts one anywhere;
+	// releasing selects every annotation whose box it touches
+	// (docs/phase2-design.md §5, docs/phase6-design.md §3).
 	ModeMarquee
+	// ModeZoomClick arms one click of the zoom tool: a release that did not
+	// travel zooms around the press point, a press that moved is a drag this
+	// phase leaves undefined (docs/phase6-design.md §3).
+	ModeZoomClick
 )
 
-// Tool is the annotation tool the toolbar selects: rectangles behave exactly
-// as before, polygons are drawn click by click (§4.1), and the rotated box is
-// drawn with four clicks (§5.2).
+// Tool is the tool the strip selects, one at a time (docs/phase6-design.md §1):
+// the three annotation tools draw rectangles (docs/phase2-design.md §4.1),
+// polygons (§4.2) and rotated boxes (§5.2); the three view tools pan, zoom and
+// select with a rectangle without touching the annotations themselves.
 type Tool int
 
 const (
+	// The annotation tools come first, so the zero Tool is the default one.
 	ToolRect Tool = iota
 	ToolPoly
 	ToolObb
+	// ToolPan drags the image with the left button, as Space does in any tool.
+	ToolPan
+	// ToolZoom zooms in around a click, out with Alt held.
+	ToolZoom
+	// ToolMarquee drags a selection rectangle without Shift.
+	ToolMarquee
 )
 
 // dragState carries the in-progress drag information.

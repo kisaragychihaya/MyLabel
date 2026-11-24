@@ -258,62 +258,6 @@ func (msgs Messages) ToolbarExportDataset() string {
 	return Catalog.Format(msgs.locale, "toolbarExportDataset", nil)
 }
 
-// ToolbarTools says "工具:"
-// in the language the app shows.
-//
-// The label before the annotation tool buttons.
-func ToolbarTools() string { return In(i18n.Locale()).ToolbarTools() }
-
-// ToolbarTools says "工具:"
-// in the language of msgs.
-//
-// The label before the annotation tool buttons.
-func (msgs Messages) ToolbarTools() string {
-	return Catalog.Format(msgs.locale, "toolbarTools", nil)
-}
-
-// ToolbarToolRect says "矩形 (R)"
-// in the language the app shows.
-//
-// The toolbar button of the rectangle tool.
-func ToolbarToolRect() string { return In(i18n.Locale()).ToolbarToolRect() }
-
-// ToolbarToolRect says "矩形 (R)"
-// in the language of msgs.
-//
-// The toolbar button of the rectangle tool.
-func (msgs Messages) ToolbarToolRect() string {
-	return Catalog.Format(msgs.locale, "toolbarToolRect", nil)
-}
-
-// ToolbarToolPoly says "多边形 (P)"
-// in the language the app shows.
-//
-// The toolbar button of the polygon tool.
-func ToolbarToolPoly() string { return In(i18n.Locale()).ToolbarToolPoly() }
-
-// ToolbarToolPoly says "多边形 (P)"
-// in the language of msgs.
-//
-// The toolbar button of the polygon tool.
-func (msgs Messages) ToolbarToolPoly() string {
-	return Catalog.Format(msgs.locale, "toolbarToolPoly", nil)
-}
-
-// ToolbarToolObb says "旋转框 (O)"
-// in the language the app shows.
-//
-// The toolbar button of the rotated box tool.
-func ToolbarToolObb() string { return In(i18n.Locale()).ToolbarToolObb() }
-
-// ToolbarToolObb says "旋转框 (O)"
-// in the language of msgs.
-//
-// The toolbar button of the rotated box tool.
-func (msgs Messages) ToolbarToolObb() string {
-	return Catalog.Format(msgs.locale, "toolbarToolObb", nil)
-}
-
 // ToolbarLabels says "标签 (L)"
 // in the language the app shows.
 //
@@ -368,6 +312,102 @@ func ToolbarLabelsHidden() string { return In(i18n.Locale()).ToolbarLabelsHidden
 // The status bar, after the category chips were hidden.
 func (msgs Messages) ToolbarLabelsHidden() string {
 	return Catalog.Format(msgs.locale, "toolbarLabelsHidden", nil)
+}
+
+// ToolStripPan says "抓手 (H)"
+// in the language the app shows.
+//
+// The tool strip's hand tool button: its accessible name and its tooltip,
+// the tool's name and its shortcut.
+func ToolStripPan() string { return In(i18n.Locale()).ToolStripPan() }
+
+// ToolStripPan says "抓手 (H)"
+// in the language of msgs.
+//
+// The tool strip's hand tool button: its accessible name and its tooltip,
+// the tool's name and its shortcut.
+func (msgs Messages) ToolStripPan() string {
+	return Catalog.Format(msgs.locale, "toolStripPan", nil)
+}
+
+// ToolStripZoom says "缩放 (Z)"
+// in the language the app shows.
+//
+// The tool strip's zoom tool button: its accessible name and its tooltip,
+// the tool's name and its shortcut.
+func ToolStripZoom() string { return In(i18n.Locale()).ToolStripZoom() }
+
+// ToolStripZoom says "缩放 (Z)"
+// in the language of msgs.
+//
+// The tool strip's zoom tool button: its accessible name and its tooltip,
+// the tool's name and its shortcut.
+func (msgs Messages) ToolStripZoom() string {
+	return Catalog.Format(msgs.locale, "toolStripZoom", nil)
+}
+
+// ToolStripMarquee says "选框 (M)"
+// in the language the app shows.
+//
+// The tool strip's marquee tool button: its accessible name and its
+// tooltip, the tool's name and its shortcut.
+func ToolStripMarquee() string { return In(i18n.Locale()).ToolStripMarquee() }
+
+// ToolStripMarquee says "选框 (M)"
+// in the language of msgs.
+//
+// The tool strip's marquee tool button: its accessible name and its
+// tooltip, the tool's name and its shortcut.
+func (msgs Messages) ToolStripMarquee() string {
+	return Catalog.Format(msgs.locale, "toolStripMarquee", nil)
+}
+
+// ToolStripRect says "矩形 (R)"
+// in the language the app shows.
+//
+// The tool strip's rectangle tool button: its accessible name and its
+// tooltip, the tool's name and its shortcut.
+func ToolStripRect() string { return In(i18n.Locale()).ToolStripRect() }
+
+// ToolStripRect says "矩形 (R)"
+// in the language of msgs.
+//
+// The tool strip's rectangle tool button: its accessible name and its
+// tooltip, the tool's name and its shortcut.
+func (msgs Messages) ToolStripRect() string {
+	return Catalog.Format(msgs.locale, "toolStripRect", nil)
+}
+
+// ToolStripPoly says "多边形 (P)"
+// in the language the app shows.
+//
+// The tool strip's polygon tool button: its accessible name and its
+// tooltip, the tool's name and its shortcut.
+func ToolStripPoly() string { return In(i18n.Locale()).ToolStripPoly() }
+
+// ToolStripPoly says "多边形 (P)"
+// in the language of msgs.
+//
+// The tool strip's polygon tool button: its accessible name and its
+// tooltip, the tool's name and its shortcut.
+func (msgs Messages) ToolStripPoly() string {
+	return Catalog.Format(msgs.locale, "toolStripPoly", nil)
+}
+
+// ToolStripObb says "旋转框 (O)"
+// in the language the app shows.
+//
+// The tool strip's rotated box tool button: its accessible name and its
+// tooltip, the tool's name and its shortcut.
+func ToolStripObb() string { return In(i18n.Locale()).ToolStripObb() }
+
+// ToolStripObb says "旋转框 (O)"
+// in the language of msgs.
+//
+// The tool strip's rotated box tool button: its accessible name and its
+// tooltip, the tool's name and its shortcut.
+func (msgs Messages) ToolStripObb() string {
+	return Catalog.Format(msgs.locale, "toolStripObb", nil)
 }
 
 // StatusOpened says "{layout, select, widen {检测到 YOLO 数据集布局，已改为打开数据集根，} other {}}已打开 {dir}（{…"

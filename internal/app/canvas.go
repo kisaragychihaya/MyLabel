@@ -62,11 +62,7 @@ func (a *App) canvasView(c *ui.Context) ui.Element {
 	cv := ui.Box(c).FillWidth().Grow(1).Clip().Label(locales.HintCanvasName())
 	cv.Bind(&a.canvasRef)
 	cv.Focusable()
-	if a.spacePan {
-		cv.Cursor(ui.CursorGrab)
-	} else {
-		cv.Cursor(ui.CursorCrosshair)
-	}
+	cv.Cursor(canvasCursor(a.tool, a.spacePan))
 	cv.Draw(func(p *ui.Painter, r ui.Rect) {
 		if a.fitOnLoad {
 			a.fitToCanvas(r)
@@ -101,6 +97,20 @@ func (a *App) fitToCanvas(r ui.Rect) {
 	a.panX = (float64(r.W) - a.imgW*a.zoom) / 2
 	a.panY = (float64(r.H) - a.imgH*a.zoom) / 2
 	a.fitOnLoad = false
+}
+
+// canvasCursor is the canvas's pointer shape: a hand while panning, whether
+// Space is held in any tool or the hand tool is selected, a pointer for the
+// click-to-zoom tool, and the crosshair the annotation and marquee tools draw
+// with (docs/phase6-design.md §3).
+func canvasCursor(tool Tool, spacePan bool) ui.Cursor {
+	switch {
+	case spacePan || tool == ToolPan:
+		return ui.CursorGrab
+	case tool == ToolZoom:
+		return ui.CursorPointer
+	}
+	return ui.CursorCrosshair
 }
 
 // drawCanvas paints the background, the image, the annotations and the

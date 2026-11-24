@@ -142,6 +142,35 @@ func (a *App) pointerDown(ev ui.InputEvent) bool {
 		ctrl := ev.Mods&ui.Ctrl != 0
 		shift := ev.Mods&ui.Shift != 0
 
+		// The view tools take the press before the annotation hit test: the hand
+		// pans, the zoom tool arms one click and the marquee drags a selection
+		// rectangle. Shift keeps its old meaning in every tool — a Shift+drag on
+		// empty canvas marks a marquee — so the hand and the zoom tool stand aside
+		// for it and the legacy paths below take the press; the marquee tool
+		// already is that gesture and ignores Shift. The chip check above runs
+		// first, so a chip stays clickable in every tool (docs/phase6-design.md §3).
+		switch {
+		case a.tool == ToolMarquee:
+			// Shift+drag's path, without needing Shift and whatever is under the
+			// pointer: the release selects what the rectangle touches (§5).
+			a.mode = ModeMarquee
+			a.drag = dragState{annIndex: -1, handle: -1, start: p}
+			a.hover, a.hasHover = p, true
+			return true
+		case shift:
+			// The legacy gestures below: a marquee on empty canvas, a selection or
+			// a move on an annotation.
+		case a.tool == ToolPan:
+			// The same panning ModePan and Space use; start holds canvas DIP.
+			a.mode = ModePan
+			a.drag = dragState{annIndex: -1, handle: -1, start: Point{X: float64(ev.X), Y: float64(ev.Y)}}
+			return true
+		case a.tool == ToolZoom:
+			a.mode = ModeZoomClick
+			a.drag = dragState{annIndex: -1, handle: -1, start: Point{X: float64(ev.X), Y: float64(ev.Y)}}
+			return true
+		}
+
 		// Handles, edges and vertices belong to a sole selection (§5), so the
 		// hit test is asked about that one annotation or about none.
 		hit := hitTestAnns(img.Anns, a.soleSelection(), p, a.zoom)
@@ -356,6 +385,11 @@ func (a *App) pointerMove(ev ui.InputEvent) bool {
 		// a.hover, and only the release decides what gets selected (§5).
 		return true
 
+	case ModeZoomClick:
+		// The zoom tool acts on the release, and only if the press did not
+		// travel (docs/phase6-design.md §3).
+		return true
+
 	case ModeMove:
 		img := a.curImage()
 		if img == nil || len(a.drag.group) == 0 {
@@ -454,6 +488,14 @@ func (a *App) pointerUp(ev ui.InputEvent) bool {
 		a.selectInMarquee(a.pointerImage(ev.X, ev.Y))
 		return true
 
+	case ModeZoomClick:
+		a.mode = ModeIdle
+		if ev.Canceled {
+			return true
+		}
+		a.zoomAtClick(ev)
+		return true
+
 	case ModeMove, ModeHandle:
 		defer func() { a.mode = ModeIdle }()
 		img := a.curImage()
@@ -531,6 +573,28 @@ func (a *App) zoomAround(cursor Point, factor float64) {
 	a.panX, a.panY, a.zoom = pan.X, pan.Y, zoom
 }
 
+// zoomStep is one click of the zoom tool: 1.25 in, and its inverse out with Alt
+// held (docs/phase6-design.md §3).
+const zoomStep = 1.25
+
+// zoomAtClick zooms one step around the press point of the zoom tool, so the
+// image point under the pointer stays under it. A press that travelled is a
+// drag, which this phase does not define: it zooms nothing (docs/phase6-design
+// §3, the same click slop a double-click uses).
+func (a *App) zoomAtClick(ev ui.InputEvent) {
+	// ModeZoomClick keeps the press in canvas DIP, as ModePan does, so the slop
+	// is measured on screen whatever the zoom.
+	at := Point{X: float64(ev.X), Y: float64(ev.Y)}
+	if distance(at, a.drag.start) > dblClickSlopDIP {
+		return
+	}
+	factor := zoomStep
+	if ev.Mods&ui.Alt != 0 {
+		factor = 1 / zoomStep
+	}
+	a.zoomAround(at, factor)
+}
+
 // keyDown handles the canvas's shortcuts.
 func (a *App) keyDown(ev ui.InputEvent) bool {
 	// The z-order menu takes Escape first: it closes the menu rather than
@@ -548,8 +612,9 @@ func (a *App) keyDown(ev ui.InputEvent) bool {
 	if ev.Mods&ui.Ctrl != 0 && ev.Key == ui.KeyB {
 		return a.carryPrevImage()
 	}
-	// A/D switch images, F refits the view: only without modifiers, so the
-	// Ctrl+A/Ctrl+D combinations above and in View keep their single meaning.
+	// A/D switch images, F refits the view, H/Z/M pick a tool: only without
+	// modifiers, so the Ctrl+A/Ctrl+D/Ctrl+Z combinations above and in View keep
+	// their single meaning (docs/phase6-design.md §1).
 	if ev.Mods == 0 {
 		switch ev.Key {
 		case ui.KeyA:
@@ -558,6 +623,15 @@ func (a *App) keyDown(ev ui.InputEvent) bool {
 			return a.goImage(1)
 		case ui.KeyF:
 			return a.fitWindow()
+		case ui.KeyH:
+			a.setTool(ToolPan)
+			return true
+		case ui.KeyZ:
+			a.setTool(ToolZoom)
+			return true
+		case ui.KeyM:
+			a.setTool(ToolMarquee)
+			return true
 		}
 	}
 	switch ev.Key {
@@ -732,6 +806,10 @@ func (a *App) cancelDrag() bool {
 	case ModeMarquee:
 		a.mode = ModeIdle
 		return true
+	case ModeZoomClick:
+		// The click was cancelled before it zoomed anything.
+		a.mode = ModeIdle
+		return true
 	case ModePan:
 		// Panning may have interrupted a polygon draft: Escape ends the pan
 		// only, so the vertices clicked so far survive.
@@ -751,15 +829,22 @@ func (a *App) endPan() {
 	a.mode = ModeIdle
 }
 
-// setTool switches the annotation tool, dropping a polygon draft that belongs
-// to the tool being left.
+// setTool switches the tool, dropping whatever the tool being left had in
+// flight: a gesture in progress keeps the tool it started with, and a draft or a
+// rubber band is dropped as Escape drops it (docs/phase6-design.md §1).
 func (a *App) setTool(t Tool) {
 	if t == a.tool {
 		return
 	}
-	if a.mode == ModePolyCreate {
-		a.cancelPolyDraft()
+	// A move, a handle drag or a marquee holds annotation snapshots by index and
+	// belongs to the tool that started it: the switch waits for its end.
+	if a.dragInProgress() {
+		return
 	}
+	a.cancelDrag()
+	// A pan that interrupted a polygon draft brings it back on endPan, and a
+	// canvas left mid-draft must not hand that draft to another tool.
+	a.cancelPolyDraft()
 	a.tool = t
 }
 

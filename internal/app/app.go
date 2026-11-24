@@ -575,6 +575,7 @@ func (a *App) View(c *ui.Context) {
 		// Stretch pins the canvas to the row's height: a Row centers its
 		// children vertically by default, which would leave the canvas 0 high.
 		ui.Row(c).FillWidth().Grow(1).AlignItems(ui.Stretch).Children(func() {
+			a.toolStrip(c)
 			a.canvasView(c)
 			a.categoryPanel(c)
 		})
@@ -628,10 +629,6 @@ func (a *App) toolbar(c *ui.Context) {
 		if ui.Button(c.Key("exportDataset"), locales.ToolbarExportDataset()).Clicked() {
 			a.openExportWizard()
 		}
-		ui.Text(c, locales.ToolbarTools()).Padding(8, 0, 0, 0)
-		a.toolButton(c, "toolRect", locales.ToolbarToolRect(), ToolRect)
-		a.toolButton(c, "toolPoly", locales.ToolbarToolPoly(), ToolPoly)
-		a.toolButton(c, "toolObb", locales.ToolbarToolObb(), ToolObb)
 		a.labelButton(c)
 		ui.Text(c, locales.ToolbarShortcutHint()).Padding(8, 0, 0, 0).TextColor(t.TextMuted)
 	})
@@ -658,20 +655,6 @@ func (a *App) toggleLabels() {
 		a.lastStatus = locales.ToolbarLabelsShown()
 	} else {
 		a.lastStatus = locales.ToolbarLabelsHidden()
-	}
-}
-
-// toolButton renders one annotation-tool button, highlighted while that tool
-// is active (docs/phase2-design.md §4.1).
-func (a *App) toolButton(c *ui.Context, key, label string, t Tool) {
-	var btn ui.Element
-	if a.tool == t {
-		btn = ui.PrimaryButton(c.Key(key), label)
-	} else {
-		btn = ui.Button(c.Key(key), label)
-	}
-	if btn.Clicked() {
-		a.setTool(t)
 	}
 }
 
