@@ -952,6 +952,54 @@ func (msgs Messages) StatusAIEncoding() string {
 	return Catalog.Format(msgs.locale, "statusAIEncoding", nil)
 }
 
+// StatusAIPrefetching says "正在后台编码图像…"
+// in the language the app shows.
+//
+// The status bar, when the first collected point starts encoding the image
+// in the background, ahead of the double-click that will ask for a mask.
+func StatusAIPrefetching() string { return In(i18n.Locale()).StatusAIPrefetching() }
+
+// StatusAIPrefetching says "正在后台编码图像…"
+// in the language of msgs.
+//
+// The status bar, when the first collected point starts encoding the image
+// in the background, ahead of the double-click that will ask for a mask.
+func (msgs Messages) StatusAIPrefetching() string {
+	return Catalog.Format(msgs.locale, "statusAIPrefetching", nil)
+}
+
+// StatusAIPrefetchDone says "后台编码完成，双击生成标注"
+// in the language the app shows.
+//
+// The status bar, when the background encode the first point started has
+// finished and the embedding is cached for the double-click.
+func StatusAIPrefetchDone() string { return In(i18n.Locale()).StatusAIPrefetchDone() }
+
+// StatusAIPrefetchDone says "后台编码完成，双击生成标注"
+// in the language of msgs.
+//
+// The status bar, when the background encode the first point started has
+// finished and the embedding is cached for the double-click.
+func (msgs Messages) StatusAIPrefetchDone() string {
+	return Catalog.Format(msgs.locale, "statusAIPrefetchDone", nil)
+}
+
+// StatusAIPrefetchFailed says "后台编码失败，双击时会重新编码"
+// in the language the app shows.
+//
+// The status bar, when the background encode the first point started
+// failed; the double-click encodes again and reports that error.
+func StatusAIPrefetchFailed() string { return In(i18n.Locale()).StatusAIPrefetchFailed() }
+
+// StatusAIPrefetchFailed says "后台编码失败，双击时会重新编码"
+// in the language of msgs.
+//
+// The status bar, when the background encode the first point started
+// failed; the double-click encodes again and reports that error.
+func (msgs Messages) StatusAIPrefetchFailed() string {
+	return Catalog.Format(msgs.locale, "statusAIPrefetchFailed", nil)
+}
+
 // StatusAIDecoding says "正在推理…"
 // in the language the app shows.
 //

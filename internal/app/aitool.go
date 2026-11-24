@@ -21,7 +21,8 @@ import (
 // The first collected point starts encoding the image right away, in the
 // background (§6): by the time the user double-clicks, the heavy half of the work
 // is usually already cached and the run only has to decode. Encoding ahead is
-// best effort — silent, at most one in flight, dropped when the image or the
+// best effort — the status bar says it started and how it ended, at most one is
+// in flight, and one that lands late is dropped when the image or the
 // generation moved on — and it never changes what the inference does: a
 // double-click whose embedding is not cacheable yet simply encodes again.
 
@@ -116,12 +117,13 @@ func (a *App) aiReleaseEmbedding() {
 
 // aiEncodeAhead encodes the current image in the background as soon as the first
 // foreground point is collected (§6), so the double-click that follows has only
-// the decode left to do. It is deliberately silent: no status, no aiBusy, and a
-// failure is simply forgotten — the next first click tries again, and the
-// inference itself reports whatever goes wrong when the user actually asks for a
-// mask. It runs on the main thread, since it decides what the cache will hold;
-// the encode it starts never reads App state. It starts nothing while an
-// inference is in flight — the reason is in the guard below.
+// the decode left to do. It is best effort but not invisible: the status bar
+// says the encode started, and reports whether it finished — a failure only
+// means the double-click will encode again and surface the error then. At most
+// one encode is in flight app-wide, and it starts nothing while an inference is
+// in flight — the reason is in the guard below. It runs on the main thread,
+// since it decides what the cache will hold; the encode it starts never reads
+// App state.
 func (a *App) aiEncodeAhead() {
 	img := a.curImage()
 	if img == nil {
@@ -155,6 +157,7 @@ func (a *App) aiEncodeAhead() {
 	a.aiGen++
 	gen := a.aiGen
 	a.aiEncBusy, a.aiEncFor = true, imgIndex
+	a.lastStatus = locales.StatusAIPrefetching()
 
 	info := *img
 	win := a.win
@@ -200,13 +203,15 @@ func aiEncode(info *ImageInfo, imgIndex int, hook aiEncodeFunc, sam *sam2.Client
 }
 
 // aiEncodeLanded hands a finished encode back to the main thread and clears the
-// busy flag first, whatever happens next. A failure is dropped in silence: the
-// user asked for nothing visible. A run whose generation or image no longer
-// matches is stale — its embedding is released here and the cache keeps what the
-// current image's own runs put there (§6).
+// busy flag first, whatever happens next. The status bar says how it ended — a
+// failure only means the double-click encodes again and reports that error. A
+// run whose generation or image no longer matches is stale: its embedding is
+// released here, the status is left alone (it names whatever the user moved on
+// to), and the cache keeps what the current image's own runs put there (§6).
 func (a *App) aiEncodeLanded(emb sam2.Embedding, err error, gen uint64, imgIndex int) {
 	a.aiEncBusy, a.aiEncFor = false, -1
 	if err != nil {
+		a.lastStatus = locales.StatusAIPrefetchFailed()
 		return
 	}
 	if gen != a.aiGen || imgIndex != a.loaded {
@@ -214,6 +219,7 @@ func (a *App) aiEncodeLanded(emb sam2.Embedding, err error, gen uint64, imgIndex
 		return
 	}
 	a.aiAdoptEmbedding(emb, imgIndex)
+	a.lastStatus = locales.StatusAIPrefetchDone()
 }
 
 // aiAdoptEmbedding makes emb the cache entry for imgIndex, releasing the

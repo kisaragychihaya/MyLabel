@@ -476,6 +476,18 @@
   "@statusAIEncoding": {
     "description": "The status bar, while the AI assist encodes the image its prompt will be decoded against; the first run on an image pays this."
   },
+  "statusAIPrefetching": "正在后台编码图像…",
+  "@statusAIPrefetching": {
+    "description": "The status bar, when the first collected point starts encoding the image in the background, ahead of the double-click that will ask for a mask."
+  },
+  "statusAIPrefetchDone": "后台编码完成，双击生成标注",
+  "@statusAIPrefetchDone": {
+    "description": "The status bar, when the background encode the first point started has finished and the embedding is cached for the double-click."
+  },
+  "statusAIPrefetchFailed": "后台编码失败，双击时会重新编码",
+  "@statusAIPrefetchFailed": {
+    "description": "The status bar, when the background encode the first point started failed; the double-click encodes again and reports that error."
+  },
   "statusAIDecoding": "正在推理…",
   "@statusAIDecoding": {
     "description": "The status bar, while the AI assist runs the model over the collected points; the image was already encoded."

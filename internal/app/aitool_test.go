@@ -602,7 +602,6 @@ func TestAIPrefetchOnFirstPoint(t *testing.T) {
 		return sam2.Embedding{}, nil
 	}
 	a.setTool(ToolAI)
-	status := a.lastStatus
 
 	clickAt(a, Point{X: 400, Y: 300}, 1)
 	if calls != 1 {
@@ -618,9 +617,10 @@ func TestAIPrefetchOnFirstPoint(t *testing.T) {
 	if a.aiEncBusy || a.aiEncFor != -1 {
 		t.Errorf("落地后 aiEncBusy = %v、aiEncFor = %d，期望 false 与 -1", a.aiEncBusy, a.aiEncFor)
 	}
-	// Best effort: it reports nothing on the way.
-	if a.lastStatus != status {
-		t.Errorf("预编码改了状态栏：%q → %q", status, a.lastStatus)
+	// The status bar tells the user what the first click set going: it says the
+	// encode finished once the landing adopted the embedding.
+	if want := locales.StatusAIPrefetchDone(); a.lastStatus != want {
+		t.Errorf("落地后状态栏 = %q，期望 %q", a.lastStatus, want)
 	}
 	if len(a.aiPoints) != 1 {
 		t.Errorf("首点后 aiPoints = %v，期望 1 个点", a.aiPoints)
@@ -736,12 +736,13 @@ func TestAIPrefetchDiscarded(t *testing.T) {
 		t.Errorf("换图后落地的编码 aiEmbFor = %d，期望 -1（未收编）", a.aiEmbFor)
 	}
 
-	// A failure is silent: no status, no cache, flag cleared.
+	// A failure is reported, not hidden: the status says the encode failed (the
+	// double-click encodes again and surfaces that error), and nothing is cached.
 	a.lastStatus = ""
 	a.aiEncBusy, a.aiEncFor = true, 1
 	a.aiEncodeLanded(sam2.Embedding{}, errors.New("boom"), a.aiGen, 1)
-	if a.lastStatus != "" {
-		t.Errorf("预编码失败把状态栏改成了 %q，期望静默", a.lastStatus)
+	if want := locales.StatusAIPrefetchFailed(); a.lastStatus != want {
+		t.Errorf("预编码失败后状态栏 = %q，期望 %q", a.lastStatus, want)
 	}
 	if a.aiEmbFor != -1 || a.aiEncBusy {
 		t.Errorf("失败落地后 aiEmbFor = %d、aiEncBusy = %v，期望 -1 与 false", a.aiEmbFor, a.aiEncBusy)
@@ -754,7 +755,8 @@ func TestAIPrefetchDiscarded(t *testing.T) {
 // survives the run (docs/phase7-design.md §3, §6).
 func TestAIPrefetchThenInference(t *testing.T) {
 	// No hook, so the prefetch takes the real encoder over a fixture path that is
-	// not a file: it fails without a word. The inference then encodes its own.
+	// not a file: it fails and says so on the status bar. The inference then
+	// encodes its own.
 	a := aiTestApp()
 	var seen []string
 	a.aiPredict = func(img *ImageInfo, pts []Point) ([]float32, int, int, error) {
@@ -762,10 +764,9 @@ func TestAIPrefetchThenInference(t *testing.T) {
 		return aiTestMask(8, 6, 2, 1, 5, 4), 8, 6, nil
 	}
 	a.setTool(ToolAI)
-	quiet := a.lastStatus
 	clickAt(a, Point{X: 400, Y: 300}, 1)
-	if a.lastStatus != quiet {
-		t.Errorf("编码失败改了状态栏：%q → %q", quiet, a.lastStatus)
+	if want := locales.StatusAIPrefetchFailed(); a.lastStatus != want {
+		t.Errorf("编码失败后状态栏 = %q，期望 %q", a.lastStatus, want)
 	}
 	if a.aiEmbFor != -1 || a.aiEncBusy {
 		t.Errorf("编码失败后 aiEmbFor = %d、aiEncBusy = %v，期望 -1 与 false", a.aiEmbFor, a.aiEncBusy)
