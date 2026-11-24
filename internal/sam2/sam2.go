@@ -14,17 +14,22 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
 )
 
 // File names Detect looks for, both next to the executable (the DLL) and in its
-// models subdirectory (the two .param files, each with its .bin alongside).
+// models subdirectory (the two .param/.bin model pairs). The decoder also reads
+// sam2_prompt.bin from the directory holding its .param
+// (native/src/sam2_ncnn.cpp: load_prompt_consts), so that file is part of a
+// complete install and detection fails without it.
 const (
 	dllName          = "sam2_ncnn.dll"
 	encoderParamName = "sam2_encoder_fixed.ncnn.param"
 	decoderParamName = "sam2_decoder_fixed.ncnn.param"
+	promptName       = "sam2_prompt.bin"
 	modelSubdir      = "models"
 )
 
@@ -45,9 +50,10 @@ const (
 //	SAM2_MODEL_DIR                          directory holding both .param files
 //
 // The fallback layout is exeDir/sam2_ncnn.dll plus
-// exeDir/models/sam2_{encoder,decoder}_fixed.ncnn.param. Detect only stats the
-// three files and never loads the DLL; it reports false when one is missing, so
-// callers can hide the feature entirely.
+// exeDir/models/sam2_{encoder,decoder}_fixed.ncnn.param with their .bin weights
+// and sam2_prompt.bin next to the decoder .param. Detect only stats the files
+// and never loads the DLL; it reports false when one is missing, so callers can
+// hide the feature entirely.
 func Detect(exeDir string) (Config, bool) {
 	modelDir := envOr(envModelDir, filepath.Join(exeDir, modelSubdir))
 	cfg := Config{
@@ -55,7 +61,10 @@ func Detect(exeDir string) (Config, bool) {
 		EncoderParam: filepath.Clean(envOr(envEncoder, filepath.Join(modelDir, encoderParamName))),
 		DecoderParam: filepath.Clean(envOr(envDecoder, filepath.Join(modelDir, decoderParamName))),
 	}
-	if !isFile(cfg.DLL) || !isFile(cfg.EncoderParam) || !isFile(cfg.DecoderParam) {
+	if !isFile(cfg.DLL) || !isFile(cfg.EncoderParam) || !isFile(cfg.DecoderParam) ||
+		!isFile(strings.TrimSuffix(cfg.EncoderParam, ".param")+".bin") ||
+		!isFile(strings.TrimSuffix(cfg.DecoderParam, ".param")+".bin") ||
+		!isFile(filepath.Join(filepath.Dir(cfg.DecoderParam), promptName)) {
 		return Config{}, false
 	}
 	return cfg, true

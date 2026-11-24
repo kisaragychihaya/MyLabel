@@ -5,6 +5,7 @@ package sam2
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 )
@@ -21,13 +22,17 @@ func writeStub(t *testing.T, path string) {
 	}
 }
 
-// stubInstall writes the three files Detect looks for under a standard layout
-// rooted at dir (DLL next to the executable, models in dir/models).
+// stubInstall writes every file Detect looks for under a standard layout rooted
+// at dir (DLL next to the executable, models in dir/models, sam2_prompt.bin
+// next to the decoder .param).
 func stubInstall(t *testing.T, dir string) Config {
 	t.Helper()
 	writeStub(t, filepath.Join(dir, dllName))
 	writeStub(t, filepath.Join(dir, modelSubdir, encoderParamName))
+	writeStub(t, filepath.Join(dir, modelSubdir, strings.TrimSuffix(encoderParamName, ".param")+".bin"))
 	writeStub(t, filepath.Join(dir, modelSubdir, decoderParamName))
+	writeStub(t, filepath.Join(dir, modelSubdir, strings.TrimSuffix(decoderParamName, ".param")+".bin"))
+	writeStub(t, filepath.Join(dir, modelSubdir, promptName))
 	return Config{
 		DLL:          filepath.Join(dir, dllName),
 		EncoderParam: filepath.Join(dir, modelSubdir, encoderParamName),
@@ -47,6 +52,9 @@ func TestDetectMissingInstall(t *testing.T) {
 		t.Fatalf("Detect(%q) = false after a complete install", dir)
 	}
 	for _, drop := range []string{
+		filepath.Join(dir, modelSubdir, promptName),
+		filepath.Join(dir, modelSubdir, strings.TrimSuffix(decoderParamName, ".param")+".bin"),
+		filepath.Join(dir, modelSubdir, strings.TrimSuffix(encoderParamName, ".param")+".bin"),
 		filepath.Join(dir, modelSubdir, decoderParamName),
 		filepath.Join(dir, modelSubdir, encoderParamName),
 		filepath.Join(dir, dllName),
@@ -91,6 +99,9 @@ func TestDetectEnvOverrides(t *testing.T) {
 		t.Setenv(envEncoder, enc)
 		t.Setenv(envDecoder, dec)
 		t.Setenv(envModelDir, "")
+		writeStub(t, strings.TrimSuffix(enc, ".param")+".bin")
+		writeStub(t, strings.TrimSuffix(dec, ".param")+".bin")
+		writeStub(t, filepath.Join(other, promptName))
 		got, ok := Detect(exeDir)
 		if !ok {
 			t.Fatal("Detect = false, want true")
@@ -105,6 +116,9 @@ func TestDetectEnvOverrides(t *testing.T) {
 		t.Setenv(envEncoder, "")
 		t.Setenv(envDecoder, "")
 		t.Setenv(envModelDir, modelDir)
+		writeStub(t, filepath.Join(modelDir, strings.TrimSuffix(encoderParamName, ".param")+".bin"))
+		writeStub(t, filepath.Join(modelDir, strings.TrimSuffix(decoderParamName, ".param")+".bin"))
+		writeStub(t, filepath.Join(modelDir, promptName))
 		got, ok := Detect(exeDir)
 		if !ok {
 			t.Fatal("Detect = false, want true")

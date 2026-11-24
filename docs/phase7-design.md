@@ -55,10 +55,14 @@
 优先级从高到低：
 
 1. 环境变量 `SAM2_DLL` / `SAM2_ENCODER` / `SAM2_DECODER`（可单独覆盖）。
-2. exe 同级：`sam2_ncnn.dll` + `models/sam2_encoder_fixed.ncnn.param` +
-   `models/sam2_decoder_fixed.ncnn.param`。
+2. exe 同级完整运行时：`sam2_ncnn.dll` + `models/sam2_encoder_fixed.ncnn.param` +
+   `models/sam2_decoder_fixed.ncnn.param` 及各自 `.bin` + `sam2_prompt.bin`
+   （DLL 要求它在 decoder .param 同级，`load_prompt_consts`）。
 
-缺任一文件 → 探测失败 → 工具不出现。探测只做文件存在性检查（不加载 DLL），
+缺任一文件 → 探测失败 → 工具不出现。DLL 的 Vulkan 版可直接使用：无 GPU 的
+机器按设计回退 Cpu 并告警；teardown 由 `sam2_shutdown` 显式销毁（含 Vulkan
+设备），Client 的释放顺序（embedding → 两个 net → shutdown）已在
+`internal/sam2` 和 App 侧固定。探测只做文件存在性检查（不加载 DLL），
 首次推理才真正加载（`syscall.NewLazyDLL` 语义）。
 
 ## 5. 后端包

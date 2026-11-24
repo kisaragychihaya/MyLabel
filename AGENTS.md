@@ -128,5 +128,5 @@ docs/phase7-design.md   阶段 7（SAM2 智能标注辅助）契约
 - 缩放工具只有单击/Alt+单击（无 scrubby-drag 与框选放大）；工具条不可自定义
 - 5000+ 标注时 CPU 光栅掩码图集是瓶颈（真机 GPU 无此问题）
 - UI 文案走 `locales/` 消息目录（zh-Hans 源 + en）；store/importer/exporter/ir/imaging 的 error 字符串保持中文（经 err.Error() 进 UI），属刻意范围外
-- 智能标注只在 Windows 且 exe 旁有 `sam2_ncnn.dll` + `models/sam2_{encoder,decoder}_fixed.ncnn.param`（或有 `SAM2_DLL`/`SAM2_ENCODER`/`SAM2_DECODER`/`SAM2_MODEL_DIR` 环境变量）时出现，非 Windows 走 `internal/sam2` 的桩、工具恒隐藏；只做正点提示（无负点/框提示/交互精炼/mask 预览/模型设置界面），embedding 只按「当前图」缓存一份，首张图首次推理要等编码（秒级）
+- 智能标注只在 Windows 且 exe 旁有完整运行时（`sam2_ncnn.dll` + `models/sam2_{encoder,decoder}_fixed.ncnn.param` 及其 `.bin` + decoder 同级的 `sam2_prompt.bin`；或有 `SAM2_DLL`/`SAM2_ENCODER`/`SAM2_DECODER`/`SAM2_MODEL_DIR` 环境变量）时出现，缺任一文件工具即隐藏；非 Windows 走 `internal/sam2` 的桩、工具恒隐藏；DLL 的 Vulkan 版可用且无 GPU 时按设计回退 Cpu；只做正点提示（无负点/框提示/交互精炼/mask 预览/模型设置界面），embedding 只按「当前图」缓存一份，首张图首次推理要等编码（秒级，Vulkan 初始化更慢）
 - 万级图片与 >8000px 大图已压测（阶段 5 W5，无窗口 headless 计时）：10000 张 640×480 openDir（扫描+EXIF+sha256+SQLite 同步）≈2.3s，单张 640×480 loadImage ≈2-3ms；8192×8192 分块大图 loadImage ≈1.1s。缩略图条万级滚动的主观流畅度与 GUI 内大图缩放/平移未自动化，需人工抽查
