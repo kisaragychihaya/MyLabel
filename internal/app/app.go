@@ -98,9 +98,9 @@ type App struct {
 	draft    Ann  // rubber-band preview while ModeCreating; category/ID of a polygon draft
 	drag     dragState
 	spacePan bool // Space held: left-drag pans instead of creating (labelme-style)
-	// zoomOutNext is the zoom tool's direction: the next click zooms out instead
-	// of in, alternating click by click, and the magnifier's icon shows it
-	// (docs/phase6-design.md §3).
+	// zoomOutNext is the zoom tool's direction: its canvas clicks zoom out
+	// instead of in. The strip's zoom button and Z flip it, and coming to the
+	// tool starts it at a zoom in (docs/phase6-design.md §3).
 	zoomOutNext bool
 
 	// Click-by-click draft in progress (ModePolyCreate): the vertices clicked so

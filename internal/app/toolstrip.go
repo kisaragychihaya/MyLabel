@@ -40,8 +40,10 @@ func fixedIcon(svg *ui.SVG) func(*App) *ui.SVG {
 	return func(*App) *ui.SVG { return svg }
 }
 
-// zoomToolIcon is the zoom tool's button: a magnifier with a plus while the next
-// click zooms in, with a minus while it zooms out (docs/phase6-design.md §3).
+// zoomToolIcon is the zoom tool's button: a magnifier with a plus while the tool
+// zooms in, with a minus while it zooms out. Clicking that button is what flips
+// the pair, so the icon doubles as the switch
+// (docs/phase6-design.md §3).
 func zoomToolIcon(a *App) *ui.SVG {
 	if a.zoomOutNext {
 		return iconToolZoomOut
@@ -96,6 +98,10 @@ func (a *App) toolStripButton(c *ui.Context, spec toolSpec) {
 		ui.Icon(c, spec.icon(a)).FontSize(toolIconDIP)
 	})
 	if btn.Clicked() {
-		a.setTool(spec.tool)
+		// The zoom tool's button is also its direction switch: clicking the
+		// active tool's button flips the magnifier instead of switching to a tool
+		// that is already there, which chooseTool decides for the buttons and the
+		// shortcuts alike (docs/phase6-design.md §3).
+		a.chooseTool(spec.tool)
 	}
 }

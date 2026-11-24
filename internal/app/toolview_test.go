@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"mylabel/locales"
 )
 
 // Tests for the three view tools on the canvas (docs/phase6-design.md §3): the
@@ -64,19 +66,18 @@ func TestPanToolDragsView(t *testing.T) {
 	}
 }
 
-// TestZoomToolAlternates: the zoom tool's clicks alternate in and out around the
-// pressed point, the image point under the pointer stays under it, Alt forces the
-// other direction and still flips the pair, a tool switch starts the tool over
-// with a zoom in, and a press that travels zooms nothing.
-func TestZoomToolAlternates(t *testing.T) {
-	a := threeRects(t)
-	a.zoom, a.panX, a.panY = 1, 0, 0
-	a.setTool(ToolZoom)
-	if a.zoomOutNext {
-		t.Fatalf("切到缩放工具后 zoomOutNext = true，期望先放大")
-	}
+// TestZoomToolDirection: the zoom tool zooms the way its magnifier shows, and
+// the strip's button is what flips that direction — a canvas click only follows
+// it, so two clicks in a row zoom the same way. Alt inverts the one click and
+// leaves the setting alone, coming back to the tool starts over at a zoom in,
+// and the image point under the pointer stays under it throughout.
+func TestZoomToolDirection(t *testing.T) {
+	a, tt, _ := stripRig(t)
+	a.images[0].Anns = []Ann{rectAnn("b", 1, 300, 100, 100, 100)}
+	a.clearSelection()
+	tt.Frame()
 
-	// The center of the second box: the tool must zoom there, not select it.
+	// The center of the box: the tool must zoom there, not select it.
 	x, y := localOf(a, Point{X: 300, Y: 100})
 	anchor := func(step string) {
 		t.Helper()
@@ -85,47 +86,72 @@ func TestZoomToolAlternates(t *testing.T) {
 		}
 	}
 
-	// First click: in, and the next one is out.
-	localClick(a, x, y, 0)
-	if !nearly(a.zoom, zoomStep, 1e-9) || !a.zoomOutNext {
-		t.Fatalf("第 1 次单击后 zoom = %v，zoomOutNext = %v，期望 %v 与 true", a.zoom, a.zoomOutNext, zoomStep)
+	// The button selects the tool while another one is active: no flip yet.
+	if err := tt.Click(locales.ToolStripZoom()); err != nil {
+		t.Fatalf("点击缩放按钮：%v", err)
 	}
-	anchor("放大后")
+	if a.tool != ToolZoom || a.zoomOutNext {
+		t.Fatalf("点按钮后 tool = %v，zoomOutNext = %v，期望 ToolZoom 与 false", a.tool, a.zoomOutNext)
+	}
+
+	// Two canvas clicks in a row zoom the same way: the canvas does not flip.
+	localClick(a, x, y, 0)
+	if !nearly(a.zoom, zoomStep, 1e-9) || a.zoomOutNext {
+		t.Fatalf("第 1 次单击后 zoom = %v，zoomOutNext = %v，期望 %v 与 false", a.zoom, a.zoomOutNext, zoomStep)
+	}
+	anchor("第 1 次单击后")
+	localClick(a, x, y, 0)
+	if want := zoomStep * zoomStep; !nearly(a.zoom, want, 1e-9) || a.zoomOutNext {
+		t.Fatalf("第 2 次单击后 zoom = %v，zoomOutNext = %v，期望 %v 与 false", a.zoom, a.zoomOutNext, want)
+	}
+	anchor("第 2 次单击后")
 	wantSelection(t, a)
 
-	// Second click: out, back to 1, and the pair flips again.
+	// Clicking the active tool's button flips the direction and moves nothing.
+	zoom, panX, panY := a.zoom, a.panX, a.panY
+	if err := tt.Click(locales.ToolStripZoom()); err != nil {
+		t.Fatalf("再次点击缩放按钮：%v", err)
+	}
+	if !a.zoomOutNext || a.zoom != zoom || a.panX != panX || a.panY != panY {
+		t.Fatalf("再点按钮后 zoomOutNext = %v，zoom/pan = %v/(%v,%v)，期望 true 与不变的 %v/(%v,%v)",
+			a.zoomOutNext, a.zoom, a.panX, a.panY, zoom, panX, panY)
+	}
+
+	// Now a canvas click zooms out one step, around the same point.
 	localClick(a, x, y, 0)
-	if !nearly(a.zoom, 1, 1e-9) || a.zoomOutNext {
-		t.Fatalf("第 2 次单击后 zoom = %v，zoomOutNext = %v，期望 1 与 false", a.zoom, a.zoomOutNext)
+	if !nearly(a.zoom, zoomStep, 1e-9) || !a.zoomOutNext {
+		t.Fatalf("缩小后 zoom = %v，zoomOutNext = %v，期望 %v 与 true", a.zoom, a.zoomOutNext, zoomStep)
 	}
 	anchor("缩小后")
 
-	// Third click: in again.
-	localClick(a, x, y, 0)
-	if !nearly(a.zoom, zoomStep, 1e-9) || !a.zoomOutNext {
-		t.Fatalf("第 3 次单击后 zoom = %v，zoomOutNext = %v，期望 %v 与 true", a.zoom, a.zoomOutNext, zoomStep)
-	}
-
-	// Alt forces the opposite of the direction the click would have taken —
-	// zooming in while the pair says out — and still flips it.
-	a.zoom, a.panX, a.panY = 1, 0, 0
-	a.zoomOutNext = true
+	// Alt inverts that one click: in, while the tool still says out.
 	localClick(a, x, y, ui.Alt)
-	if !nearly(a.zoom, zoomStep, 1e-9) || a.zoomOutNext {
-		t.Fatalf("Alt+单击后 zoom = %v，zoomOutNext = %v，期望 %v 与 false", a.zoom, a.zoomOutNext, zoomStep)
+	if want := zoomStep * zoomStep; !nearly(a.zoom, want, 1e-9) || !a.zoomOutNext {
+		t.Fatalf("Alt 单击后 zoom = %v，zoomOutNext = %v，期望 %v 与 true", a.zoom, a.zoomOutNext, want)
 	}
-	anchor("Alt 放大后")
+	anchor("Alt 单击后")
+
+	// Z flips the direction once the tool is active, as its button does.
+	keyWith(a, ui.KeyZ, 0)
+	if a.zoomOutNext {
+		t.Errorf("按 Z 后 zoomOutNext = true，期望翻转成 false")
+	}
+	keyWith(a, ui.KeyZ, 0)
+	if !a.zoomOutNext {
+		t.Errorf("再按 Z 后 zoomOutNext = false，期望翻转成 true")
+	}
 
 	// Leaving the tool and coming back starts it over with a zoom in.
-	a.zoomOutNext = true
 	a.setTool(ToolRect)
-	a.setTool(ToolZoom)
-	if a.zoomOutNext {
-		t.Errorf("回到缩放工具后 zoomOutNext = true，期望重置为放大")
+	if err := tt.Click(locales.ToolStripZoom()); err != nil {
+		t.Fatalf("回到缩放按钮：%v", err)
+	}
+	if a.tool != ToolZoom || a.zoomOutNext {
+		t.Errorf("回到缩放工具后 tool = %v，zoomOutNext = %v，期望 ToolZoom 与 false", a.tool, a.zoomOutNext)
 	}
 
 	// A press that travelled is a drag, and dragging zooms nothing.
-	zoom, panX, panY := a.zoom, a.panX, a.panY
+	zoom, panX, panY = a.zoom, a.panX, a.panY
 	localDrag(a, Point{X: 400, Y: 300}, Point{X: 420, Y: 300}, 0)
 	if a.zoom != zoom || a.panX != panX || a.panY != panY {
 		t.Errorf("拖动后 zoom/pan = %v/(%v,%v)，期望不变 %v/(%v,%v)",

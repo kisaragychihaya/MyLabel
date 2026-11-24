@@ -577,13 +577,13 @@ func (a *App) zoomAround(cursor Point, factor float64) {
 // held (docs/phase6-design.md §3).
 const zoomStep = 1.25
 
-// zoomAtClick zooms one step around the press point of the zoom tool, so the
-// image point under the pointer stays under it. Clicks alternate: one zooms in
-// and the next one out, and the magnifier's icon shows which comes next. Alt
-// forces the opposite direction and still flips the alternation, so a click with
-// Alt reads as one click of the pair. A press that travelled is a drag, which
-// this phase does not define: it zooms nothing (docs/phase6-design.md §3, the
-// same click slop a double-click uses).
+// zoomAtClick zooms one step around the press point of the zoom tool, in the
+// direction the tool is set to: the strip's zoom button and Z flip that
+// direction, a canvas click only follows it, so two clicks in a row zoom the
+// same way. Alt inverts the direction for the one click and leaves the tool's
+// setting alone. The image point under the pointer stays under it. A press that
+// travelled is a drag, which this phase does not define: it zooms nothing
+// (docs/phase6-design.md §3, the same click slop a double-click uses).
 func (a *App) zoomAtClick(ev ui.InputEvent) {
 	// ModeZoomClick keeps the press in canvas DIP, as ModePan does, so the slop
 	// is measured on screen whatever the zoom.
@@ -591,12 +591,8 @@ func (a *App) zoomAtClick(ev ui.InputEvent) {
 	if distance(at, a.drag.start) > dblClickSlopDIP {
 		return
 	}
-	out := a.zoomOutNext != (ev.Mods&ui.Alt != 0)
-	// Every click flips the pair, the Alt one included: the direction an Alt
-	// click forced is the one the next plain click takes.
-	a.zoomOutNext = !a.zoomOutNext
 	factor := zoomStep
-	if out {
+	if a.zoomOutNext != (ev.Mods&ui.Alt != 0) {
 		factor = 1 / zoomStep
 	}
 	a.zoomAround(at, factor)
@@ -621,7 +617,8 @@ func (a *App) keyDown(ev ui.InputEvent) bool {
 	}
 	// A/D switch images, F refits the view, H/Z/M pick a tool: only without
 	// modifiers, so the Ctrl+A/Ctrl+D/Ctrl+Z combinations above and in View keep
-	// their single meaning (docs/phase6-design.md §1).
+	// their single meaning (docs/phase6-design.md §1). Z, like the strip's zoom
+	// button, flips the zoom direction once that tool is active.
 	if ev.Mods == 0 {
 		switch ev.Key {
 		case ui.KeyA:
@@ -631,13 +628,13 @@ func (a *App) keyDown(ev ui.InputEvent) bool {
 		case ui.KeyF:
 			return a.fitWindow()
 		case ui.KeyH:
-			a.setTool(ToolPan)
+			a.chooseTool(ToolPan)
 			return true
 		case ui.KeyZ:
-			a.setTool(ToolZoom)
+			a.chooseTool(ToolZoom)
 			return true
 		case ui.KeyM:
-			a.setTool(ToolMarquee)
+			a.chooseTool(ToolMarquee)
 			return true
 		}
 	}
@@ -657,13 +654,13 @@ func (a *App) keyDown(ev ui.InputEvent) bool {
 		}
 		return false
 	case ui.KeyR:
-		a.setTool(ToolRect)
+		a.chooseTool(ToolRect)
 		return true
 	case ui.KeyP:
-		a.setTool(ToolPoly)
+		a.chooseTool(ToolPoly)
 		return true
 	case ui.KeyO:
-		a.setTool(ToolObb)
+		a.chooseTool(ToolObb)
 		return true
 	case ui.KeyL:
 		// L shows and hides the category chips on the canvas.
@@ -834,6 +831,25 @@ func (a *App) endPan() {
 		return
 	}
 	a.mode = ModeIdle
+}
+
+// chooseTool is what the strip's buttons and the tool shortcuts call: a tool
+// that is not active is switched to, and the zoom tool, which is already active,
+// has its direction flipped instead — that button and Z are the only way to
+// choose the direction, as a canvas click just follows it
+// (docs/phase6-design.md §3). A gesture in progress belongs to the tool that
+// started it, so choosing waits for its end, as setTool does.
+func (a *App) chooseTool(t Tool) {
+	if a.dragInProgress() {
+		return
+	}
+	if t != a.tool {
+		a.setTool(t)
+		return
+	}
+	if t == ToolZoom {
+		a.zoomOutNext = !a.zoomOutNext
+	}
 }
 
 // setTool switches the tool, dropping whatever the tool being left had in

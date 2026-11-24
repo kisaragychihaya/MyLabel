@@ -252,8 +252,9 @@ func inkBounds(frame *image.RGBA, r ui.Rect, face ui.Color) (ui.Rect, bool) {
 }
 
 // TestToolStripZoomIcon: the zoom tool's button shows the magnifier with a plus
-// while its next click zooms in, and the one with a minus while it zooms out;
-// its name and tooltip stay the same either way.
+// while the tool zooms in and the one with a minus while it zooms out, and
+// clicking that button is what flips it. Its name and tooltip stay the same
+// either way.
 func TestToolStripZoomIcon(t *testing.T) {
 	var zero App
 	zoom := -1
@@ -276,14 +277,25 @@ func TestToolStripZoomIcon(t *testing.T) {
 		t.Errorf("zoomOutNext = true 时图标不是放大镜−（%p），而是 %p", iconToolZoomOut, got)
 	}
 
-	// The button is named the same in both states: only the drawing changes.
+	// The button switches to the tool first, and flips its direction only once
+	// the tool is the active one: the drawing is what changes, the name is not.
 	a, tt, _ := stripRig(t)
-	a.setTool(ToolZoom)
 	rects := stripRects(t, tt)
 	r := rects[zoom]
+	if err := tt.Click(spec.text()); err != nil {
+		t.Fatalf("点击 %q：%v", spec.text(), err)
+	}
+	if a.tool != ToolZoom || a.zoomOutNext {
+		t.Fatalf("第一次点击后 tool = %v，zoomOutNext = %v，期望 ToolZoom 与 false", a.tool, a.zoomOutNext)
+	}
 	tt.Frame()
 	plus := block(tt.Image(), r)
-	a.zoomOutNext = true
+	if err := tt.Click(spec.text()); err != nil {
+		t.Fatalf("再次点击 %q：%v", spec.text(), err)
+	}
+	if !a.zoomOutNext {
+		t.Fatalf("再次点击后 zoomOutNext = false，期望 true")
+	}
 	tt.Frame()
 	minus := block(tt.Image(), r)
 	if changed := countChanged(plus, minus); changed < 5 {
@@ -407,6 +419,18 @@ func TestToolStripShortcuts(t *testing.T) {
 	keyWith(a, ui.KeyL, 0)
 	if a.showLabels != labels {
 		t.Errorf("L 两次后 showLabels = %v，期望回到 %v", a.showLabels, labels)
+	}
+
+	// Z on the active zoom tool is its direction switch, as the strip's button
+	// is: the first press selects the tool, the next ones flip the magnifier.
+	a.setTool(ToolRect)
+	keyWith(a, ui.KeyZ, 0)
+	if a.tool != ToolZoom || a.zoomOutNext {
+		t.Fatalf("第一次 Z 后 tool = %v，zoomOutNext = %v，期望 ToolZoom 与 false", a.tool, a.zoomOutNext)
+	}
+	keyWith(a, ui.KeyZ, 0)
+	if a.tool != ToolZoom || !a.zoomOutNext {
+		t.Fatalf("第二次 Z 后 tool = %v，zoomOutNext = %v，期望 ToolZoom 与 true", a.tool, a.zoomOutNext)
 	}
 
 	// A drag in progress belongs to the tool that started it.
