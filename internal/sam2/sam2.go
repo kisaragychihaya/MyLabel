@@ -114,17 +114,11 @@ type Client struct {
 }
 
 // New returns a client for cfg. Nothing is loaded or validated here: use
-// Available (or the first Encode/Decode) for that.
-//
-// The decoder net is pinned to the Cpu backend (SAM2_DEC_PROVIDER=cpu): the
-// Vulkan decoder corrupts multi-point prompts (libsam2_ncnn issue #1) and the
-// decoder is the cheap half of the pipeline, so Cpu there costs little while
-// the encoder stays on whatever backend the build provides. A caller that set
-// SAM2_DEC_PROVIDER already keeps that choice.
+// Available (or the first Encode/Decode) for that. The backend split needs no
+// configuration: the library pins the decoder net to Cpu itself (its Vulkan
+// execution corrupts multi-point prompts, libsam2_ncnn issue #1), while the
+// encoder keeps the build's backend.
 func New(cfg Config) *Client {
-	if _, ok := os.LookupEnv("SAM2_DEC_PROVIDER"); !ok {
-		_ = os.Setenv("SAM2_DEC_PROVIDER", "cpu")
-	}
 	return &Client{cfg: cfg}
 }
 
