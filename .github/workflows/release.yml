@@ -14,6 +14,10 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
+    # action-gh-release creates the tag's release and asks GitHub to
+    # generate its notes; the default token is read-only without this.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
