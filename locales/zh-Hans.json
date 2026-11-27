@@ -44,6 +44,22 @@
   "@toolbarOpenFolder": {
     "description": "The toolbar button that opens a folder of images."
   },
+  "toolbarUndo": "撤销",
+  "@toolbarUndo": {
+    "description": "The toolbar button that reverts the most recent command, including smart-select point collection."
+  },
+  "toolbarUndoTip": "撤销 (Ctrl+Z)",
+  "@toolbarUndoTip": {
+    "description": "The undo button's tooltip, naming its shortcut."
+  },
+  "toolbarRedo": "重做",
+  "@toolbarRedo": {
+    "description": "The toolbar button that re-applies the most recently undone command."
+  },
+  "toolbarRedoTip": "重做 (Ctrl+Shift+Z)",
+  "@toolbarRedoTip": {
+    "description": "The redo button's tooltip, naming its shortcut."
+  },
   "toolbarOpenFolderTitle": "选择图片文件夹",
   "@toolbarOpenFolderTitle": {
     "description": "The title of the platform dialog that picks the folder of images."

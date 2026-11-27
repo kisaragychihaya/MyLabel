@@ -699,6 +699,16 @@ func (a *App) toolbar(c *ui.Context) {
 				a.openDir(paths[0])
 			}
 		}
+		if ui.Button(c.Key("undo"), locales.ToolbarUndo()).
+			Tooltip(locales.ToolbarUndoTip()).
+			Disabled(len(a.undoStack) == 0).Clicked() {
+			a.undo()
+		}
+		if ui.Button(c.Key("redo"), locales.ToolbarRedo()).
+			Tooltip(locales.ToolbarRedoTip()).
+			Disabled(len(a.redoStack) == 0).Clicked() {
+			a.redo()
+		}
 		if ui.Button(c.Key("save"), locales.ToolbarSave()).Clicked() {
 			_ = a.save()
 		}

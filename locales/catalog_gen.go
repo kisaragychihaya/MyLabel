@@ -188,6 +188,64 @@ func (msgs Messages) ToolbarOpenFolder() string {
 	return Catalog.Format(msgs.locale, "toolbarOpenFolder", nil)
 }
 
+// ToolbarUndo says "撤销"
+// in the language the app shows.
+//
+// The toolbar button that reverts the most recent command, including
+// smart-select point collection.
+func ToolbarUndo() string { return In(i18n.Locale()).ToolbarUndo() }
+
+// ToolbarUndo says "撤销"
+// in the language of msgs.
+//
+// The toolbar button that reverts the most recent command, including
+// smart-select point collection.
+func (msgs Messages) ToolbarUndo() string {
+	return Catalog.Format(msgs.locale, "toolbarUndo", nil)
+}
+
+// ToolbarUndoTip says "撤销 (Ctrl+Z)"
+// in the language the app shows.
+//
+// The undo button's tooltip, naming its shortcut.
+func ToolbarUndoTip() string { return In(i18n.Locale()).ToolbarUndoTip() }
+
+// ToolbarUndoTip says "撤销 (Ctrl+Z)"
+// in the language of msgs.
+//
+// The undo button's tooltip, naming its shortcut.
+func (msgs Messages) ToolbarUndoTip() string {
+	return Catalog.Format(msgs.locale, "toolbarUndoTip", nil)
+}
+
+// ToolbarRedo says "重做"
+// in the language the app shows.
+//
+// The toolbar button that re-applies the most recently undone command.
+func ToolbarRedo() string { return In(i18n.Locale()).ToolbarRedo() }
+
+// ToolbarRedo says "重做"
+// in the language of msgs.
+//
+// The toolbar button that re-applies the most recently undone command.
+func (msgs Messages) ToolbarRedo() string {
+	return Catalog.Format(msgs.locale, "toolbarRedo", nil)
+}
+
+// ToolbarRedoTip says "重做 (Ctrl+Shift+Z)"
+// in the language the app shows.
+//
+// The redo button's tooltip, naming its shortcut.
+func ToolbarRedoTip() string { return In(i18n.Locale()).ToolbarRedoTip() }
+
+// ToolbarRedoTip says "重做 (Ctrl+Shift+Z)"
+// in the language of msgs.
+//
+// The redo button's tooltip, naming its shortcut.
+func (msgs Messages) ToolbarRedoTip() string {
+	return Catalog.Format(msgs.locale, "toolbarRedoTip", nil)
+}
+
 // ToolbarOpenFolderTitle says "选择图片文件夹"
 // in the language the app shows.
 //

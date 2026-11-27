@@ -86,7 +86,11 @@ func (a *App) aiClick(p Point, clicks int) {
 		a.aiGenerate()
 		return
 	}
-	a.aiPoints = append(a.aiPoints, p)
+	// The click itself is undoable: undo removes this point again, and after a
+	// generation the undo walk peels the restored points off one by one
+	// (docs/phase7-design.md §2). pushAI keeps the document clean — points are
+	// not a document edit.
+	a.pushAI(cmdAIAddPoint(a, p))
 	if len(a.aiPoints) == 1 {
 		// The first point is the moment the inference becomes likely: start the
 		// encoder now, in the background, so the double-click that follows finds
@@ -97,10 +101,13 @@ func (a *App) aiClick(p Point, clicks int) {
 
 // aiDropPoints forgets the collected points and invalidates every inference
 // running for them: a result that comes back afterwards finds a bumped
-// generation and is dropped (§6).
+// generation and is dropped (§6). Abandoned points are not history either:
+// their undo commands are retracted, so Esc and a tool switch leave the
+// stacks exactly as if the collecting never happened.
 func (a *App) aiDropPoints() {
 	a.aiPoints = nil
 	a.aiGen++
+	a.dropAIPointCmds()
 }
 
 // aiReleaseEmbedding drops the cached embedding. While an inference is in
@@ -393,9 +400,13 @@ func (a *App) aiFinish(res aiRun, gen uint64, imgIndex int, cat int, id string, 
 		return
 	}
 	a.push(cmdCreate(a, imgIndex, ann))
-	// The points are spent: the mask is the answer they asked for. The new
-	// annotation is left unselected, as a creation tool's is (§6.2 of phase 6).
-	a.aiPoints = nil
+	// The points are spent — the mask is the answer they asked for. The
+	// clearing is its own undoable command, pushed after the create: undoing
+	// the generation first removes the annotation, then brings the points
+	// back, and each further undo deletes one of them (docs/phase7-design.md
+	// §2). The new annotation is left unselected, as a creation tool's is
+	// (§6.2 of phase 6).
+	a.pushAI(cmdAIClearPoints(a, a.aiPoints))
 	a.lastStatus = locales.StatusAIDone(aiKindName(a.aiRectMode))
 }
 

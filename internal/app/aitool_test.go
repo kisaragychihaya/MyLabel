@@ -434,6 +434,143 @@ func clickAt(a *App, p Point, clicks int) {
 	a.handleCanvasInput(ui.Element{}, polyUp(a, p))
 }
 
+// TestAICollectUndo: every collected point is its own undo step; undoing
+// peels them off one by one, redoing puts them back, and collecting alone
+// never marks the document dirty (docs/phase7-design.md §2).
+func TestAICollectUndo(t *testing.T) {
+	a := aiTestApp()
+	if !keyWith(a, ui.KeyS, 0) {
+		t.Fatalf("S 未激活 AI 工具")
+	}
+	dirtyBefore := a.dirty
+	clickAt(a, Point{X: 400, Y: 300}, 1)
+	clickAt(a, Point{X: 420, Y: 300}, 1)
+	clickAt(a, Point{X: 440, Y: 300}, 1)
+	if len(a.aiPoints) != 3 {
+		t.Fatalf("收集后 aiPoints = %v，期望 3 个点", a.aiPoints)
+	}
+	if a.dirty != dirtyBefore {
+		t.Errorf("收集点把文档标脏了")
+	}
+	a.undo()
+	a.undo()
+	a.undo()
+	if len(a.aiPoints) != 0 {
+		t.Errorf("撤销三次后 aiPoints = %v，期望空", a.aiPoints)
+	}
+	a.redo()
+	a.redo()
+	if len(a.aiPoints) != 2 {
+		t.Errorf("重做两次后 aiPoints = %v，期望 2 个点", a.aiPoints)
+	}
+	if !nearly(a.aiPoints[1].X, 420, 1e-9) {
+		t.Errorf("重做恢复的点 = %v，期望原顺序", a.aiPoints)
+	}
+}
+
+// TestAIGenerationUndoChain: undoing a generation first brings the spent
+// points back, then removes the annotation, then peels the points off one by
+// one; redoing replays the whole sequence (docs/phase7-design.md §2).
+func TestAIGenerationUndoChain(t *testing.T) {
+	a := aiTestApp()
+	keyWith(a, ui.KeyS, 0)
+	clickAt(a, Point{X: 400, Y: 300}, 1)
+	clickAt(a, Point{X: 420, Y: 300}, 1)
+	clickAt(a, Point{X: 450, Y: 320}, 2) // double-click runs the inference
+	if len(anns(a)) != 1 || len(a.aiPoints) != 0 {
+		t.Fatalf("生成后 anns=%d points=%v，期望 1 条标注与空点集", len(anns(a)), a.aiPoints)
+	}
+
+	// First undo: the clearing is reverted — the points come back, the
+	// annotation is still there. (The double-click moved the second point
+	// instead of adding a third, so the collection is two points.)
+	a.undo()
+	if len(a.aiPoints) != 2 {
+		t.Fatalf("第一次撤销后 aiPoints = %v，期望恢复 2 个点", a.aiPoints)
+	}
+	if len(anns(a)) != 1 {
+		t.Fatalf("第一次撤销后 anns = %d，期望标注仍在（先恢复点，再移除标注）", len(anns(a)))
+	}
+	// Second undo: the create is reverted — the outline goes away.
+	a.undo()
+	if len(anns(a)) != 0 {
+		t.Fatalf("第二次撤销后 anns = %d，期望 0 条", len(anns(a)))
+	}
+	// Further undos delete the restored points one by one.
+	a.undo()
+	if len(a.aiPoints) != 1 {
+		t.Fatalf("第三次撤销后 aiPoints = %v，期望 1 个点", a.aiPoints)
+	}
+	a.undo()
+	if len(a.aiPoints) != 0 {
+		t.Fatalf("全部撤销后 aiPoints = %v，期望空", a.aiPoints)
+	}
+
+	// Redo replays the clicks, the generation and the clearing in order.
+	a.redo() // point 1
+	a.redo() // point 2
+	if len(a.aiPoints) != 2 {
+		t.Fatalf("重做两次后 aiPoints = %v，期望 2 个点", a.aiPoints)
+	}
+	a.redo() // the annotation
+	if len(anns(a)) != 1 {
+		t.Fatalf("重做生成后 anns = %d，期望 1 条", len(anns(a)))
+	}
+	a.redo() // the clearing
+	if len(a.aiPoints) != 0 {
+		t.Fatalf("重做清点后 aiPoints = %v，期望空", a.aiPoints)
+	}
+}
+
+// TestAIEscRetractsPointCmds: abandoning a collection (Esc) removes its undo
+// commands from both stacks — undo has nothing to peel, redo has nothing to
+// resurrect (docs/phase7-design.md §2).
+func TestAIEscRetractsPointCmds(t *testing.T) {
+	a := aiTestApp()
+	keyWith(a, ui.KeyS, 0)
+	clickAt(a, Point{X: 400, Y: 300}, 1)
+	clickAt(a, Point{X: 420, Y: 300}, 1)
+	if len(a.undoStack) != 2 {
+		t.Fatalf("Esc 前 undoStack = %d 条，期望 2 条点命令", len(a.undoStack))
+	}
+	keyWith(a, ui.KeyEscape, 0)
+	if len(a.aiPoints) != 0 {
+		t.Fatalf("Esc 后 aiPoints = %v，期望空", a.aiPoints)
+	}
+	if len(a.undoStack) != 0 {
+		t.Errorf("Esc 后 undoStack = %d 条，期望点命令被收回", len(a.undoStack))
+	}
+	a.redo() // must not bring the abandoned points back
+	if len(a.aiPoints) != 0 {
+		t.Errorf("Esc 后 redo 恢复了被放弃的点：%v", a.aiPoints)
+	}
+}
+
+// TestToolbarUndoRedoButtons: the toolbar pair mirrors the stacks — disabled
+// when empty, active after an edit, and a click performs the command.
+func TestToolbarUndoRedoButtons(t *testing.T) {
+	a, tt, _ := stripRig(t)
+	if got := len(a.undoStack); got != 0 {
+		t.Fatalf("初始 undoStack = %d，期望 0", got)
+	}
+	// One edit makes undo available and performs it on click.
+	a.push(cmdCreate(a, a.loaded, Ann{ID: "t1", Kind: KindRect, Cat: 0,
+		CX: 10, CY: 10, W: 20, H: 20}))
+	if err := tt.Click(locales.ToolbarUndo()); err != nil {
+		t.Fatalf("点击 %q：%v", locales.ToolbarUndo(), err)
+	}
+	if got := len(anns(a)); got != 0 {
+		t.Errorf("点击撤销后 anns = %d，期望 0", got)
+	}
+	if err := tt.Click(locales.ToolbarRedo()); err != nil {
+		t.Fatalf("点击 %q：%v", locales.ToolbarRedo(), err)
+	}
+	if got := len(anns(a)); got != 1 {
+		t.Errorf("点击重做后 anns = %d，期望 1", got)
+	}
+}
+
+
 // hasPoint reports whether pts holds p within tol on both axes.
 func hasPoint(pts []Point, p Point, tol float64) bool {
 	for _, q := range pts {

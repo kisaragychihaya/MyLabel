@@ -38,6 +38,105 @@ func (a *App) push(cmd Command) {
 	a.setDirty(cmd.Img)
 }
 
+// pushAI executes an AI-collection command and pushes it like push, but
+// without marking the document dirty: collecting (or dropping) prompt points
+// is not a document edit — nothing saveable exists until the mask becomes an
+// annotation, and the create command that moment pushes marks the dirty bit
+// for the whole sequence.
+func (a *App) pushAI(cmd Command) {
+	if cmd.Do == nil {
+		return
+	}
+	cmd.Do()
+	a.undoStack = append(a.undoStack, cmd)
+	if len(a.undoStack) > undoLimit {
+		trimmed := make([]Command, undoLimit)
+		copy(trimmed, a.undoStack[len(a.undoStack)-undoLimit:])
+		a.undoStack = trimmed
+	}
+	a.redoStack = nil
+}
+
+// Names of the AI-collection commands, so aiDropPoints can retract the
+// point commands of an abandoned collection from both stacks: those edits
+// never happened as far as undo is concerned.
+const (
+	cmdNameAIAddPoint  = "ai add point"
+	cmdNameAIClearPts  = "ai clear points"
+)
+
+// cmdAIAddPoint returns the command that appends one collected prompt point
+// at its recorded index: undo removes it again, redo re-inserts it. After a
+// generation the same undo peels the restored points off one by one, exactly
+// reversing the clicks that collected them (docs/phase7-design.md §2).
+func cmdAIAddPoint(a *App, p Point) Command {
+	index := -1
+	insert := func() {
+		if index < 0 {
+			index = len(a.aiPoints)
+		}
+		if index > len(a.aiPoints) {
+			index = len(a.aiPoints)
+		}
+		a.aiPoints = append(a.aiPoints, Point{})
+		copy(a.aiPoints[index+1:], a.aiPoints[index:])
+		a.aiPoints[index] = p
+	}
+	remove := func() {
+		if index < 0 || index >= len(a.aiPoints) {
+			return
+		}
+		a.aiPoints = append(a.aiPoints[:index:index], a.aiPoints[index+1:]...)
+	}
+	return Command{
+		Name: cmdNameAIAddPoint,
+		Img:  -1,
+		Do:   insert,
+		Undo: remove,
+	}
+}
+
+// cmdAIClearPoints returns the command that empties the collected points on
+// Do and restores the snapshot on Undo. aiFinish pushes it right after the
+// create command, so undoing a generation first removes the annotation (the
+// create command) and then brings the spent points back; redoing spends them
+// again.
+func cmdAIClearPoints(a *App, spent []Point) Command {
+	return Command{
+		Name: cmdNameAIClearPts,
+		Img:  -1,
+		Do: func() {
+			a.aiPoints = nil
+		},
+		Undo: func() {
+			a.aiPoints = append([]Point(nil), spent...)
+		},
+	}
+}
+
+// dropAIPointCmds retracts the point commands of an abandoned collection:
+// while collecting, the point commands sit in one uninterrupted run at the
+// top of the undo stack (every push clears the redo stack), so dropping that
+// run is exact. Point commands that a generation's clear-command separates
+// from the top stay: they belong to a finished generation the user may walk
+// back through. The redo side is filtered wherever the commands sit, because
+// an undone point is exactly what an abandoned collection must not restore.
+func (a *App) dropAIPointCmds() {
+	for len(a.undoStack) > 0 && a.undoStack[len(a.undoStack)-1].Name == cmdNameAIAddPoint {
+		a.undoStack = a.undoStack[:len(a.undoStack)-1]
+	}
+	if len(a.redoStack) == 0 {
+		return
+	}
+	kept := a.redoStack[:0]
+	for _, cmd := range a.redoStack {
+		if cmd.Name != cmdNameAIAddPoint {
+			kept = append(kept, cmd)
+		}
+	}
+	a.redoStack = kept
+}
+
 // undo reverts the most recent command, if any.
 func (a *App) undo() {
 	if len(a.undoStack) == 0 {
