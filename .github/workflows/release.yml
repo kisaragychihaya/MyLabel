@@ -37,9 +37,23 @@ jobs:
           GOFLAGS: "-tags=mygo_nowebview"
         run: go tool mygo build
 
+      - name: Pack the portable zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/windows-amd64/MyLabel.exe", "dist/windows-amd64/sam2_ncnn.dll", "dist/windows-amd64/icon.png" -DestinationPath "dist/windows-amd64/MyLabel-portable.zip" -Force
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: mylabel-windows
           path: dist/windows-amd64/
           if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/windows-amd64/mylabel-setup-*.exe
+            dist/windows-amd64/MyLabel-portable.zip
