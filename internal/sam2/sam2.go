@@ -21,17 +21,30 @@ import (
 )
 
 // File names Detect looks for, both next to the executable (the DLL) and in its
-// models subdirectory (the two .param/.bin model pairs). The decoder also reads
-// sam2_prompt.bin from the directory holding its .param
-// (native/src/sam2_ncnn.cpp: load_prompt_consts), so that file is part of a
-// complete install and detection fails without it.
+// models subdirectory (the two .param/.bin model pairs). Model files carry a
+// generation-size prefix (sam2-small-encoder_fixed, sam2.1-tiny-encoder_fixed,
+// ...); findModelFile matches any prefix, so a runtime bundle built for any
+// supported model resolves. The decoder also reads sam2_prompt.bin from the
+// directory holding its .param (native/src/sam2_ncnn.cpp: load_prompt_consts),
+// so that file is part of a complete install and detection fails without it.
 const (
-	dllName          = "sam2_ncnn.dll"
-	encoderParamName = "sam2_encoder_fixed.ncnn.param"
-	decoderParamName = "sam2_decoder_fixed.ncnn.param"
-	promptName       = "sam2_prompt.bin"
-	modelSubdir      = "models"
+	dllName     = "sam2_ncnn.dll"
+	promptName  = "sam2_prompt.bin"
+	modelSubdir = "models"
 )
+
+// findModelFile locates the .param of the given half ("encoder" or "decoder")
+// in dir, accepting any sam2*-<half>_fixed.ncnn.param name. Returns the first
+// match in sorted order when several model generations are installed side by
+// side.
+func findModelFile(dir, half string) (string, bool) {
+	matches, err := filepath.Glob(filepath.Join(dir, "sam2*-"+half+"_fixed.ncnn.param"))
+	if err != nil || len(matches) == 0 {
+		return "", false
+	}
+	slices.Sort(matches)
+	return matches[0], true
+}
 
 // Environment overrides honoured by Detect, highest priority first: the three
 // per-file paths, then SAM2_MODEL_DIR for the directory holding the .param
@@ -50,16 +63,34 @@ const (
 //	SAM2_MODEL_DIR                          directory holding both .param files
 //
 // The fallback layout is exeDir/sam2_ncnn.dll plus
-// exeDir/models/sam2_{encoder,decoder}_fixed.ncnn.param with their .bin weights
-// and sam2_prompt.bin next to the decoder .param. Detect only stats the files
-// and never loads the DLL; it reports false when one is missing, so callers can
-// hide the feature entirely.
+// exeDir/models/sam2*-(encoder|decoder)_fixed.ncnn.param (any generation-size
+// prefix) with their .bin weights and sam2_prompt.bin next to the decoder
+// .param. Detect only stats the files and never loads the DLL; it reports
+// false when one is missing, so callers can hide the feature entirely.
 func Detect(exeDir string) (Config, bool) {
 	modelDir := envOr(envModelDir, filepath.Join(exeDir, modelSubdir))
+	// Individual path overrides win over the on-disk layout; the model dir
+	// glob only runs for a half that has no override.
+	encoderParam := os.Getenv(envEncoder)
+	if encoderParam == "" {
+		var ok bool
+		encoderParam, ok = findModelFile(modelDir, "encoder")
+		if !ok {
+			return Config{}, false
+		}
+	}
+	decoderParam := os.Getenv(envDecoder)
+	if decoderParam == "" {
+		var ok bool
+		decoderParam, ok = findModelFile(modelDir, "decoder")
+		if !ok {
+			return Config{}, false
+		}
+	}
 	cfg := Config{
 		DLL:          filepath.Clean(envOr(envDLL, filepath.Join(exeDir, dllName))),
-		EncoderParam: filepath.Clean(envOr(envEncoder, filepath.Join(modelDir, encoderParamName))),
-		DecoderParam: filepath.Clean(envOr(envDecoder, filepath.Join(modelDir, decoderParamName))),
+		EncoderParam: filepath.Clean(encoderParam),
+		DecoderParam: filepath.Clean(decoderParam),
 	}
 	if !isFile(cfg.DLL) || !isFile(cfg.EncoderParam) || !isFile(cfg.DecoderParam) ||
 		!isFile(strings.TrimSuffix(cfg.EncoderParam, ".param")+".bin") ||
@@ -114,10 +145,10 @@ type Client struct {
 }
 
 // New returns a client for cfg. Nothing is loaded or validated here: use
-// Available (or the first Encode/Decode) for that. The backend split needs no
-// configuration: the library pins the decoder net to Cpu itself (its Vulkan
-// execution corrupts multi-point prompts, libsam2_ncnn issue #1), while the
-// encoder keeps the build's backend.
+// Available (or the first Encode/Decode) for that. Both nets follow the DLL
+// build backend (a Vulkan-capable DLL runs encoder and decoder on GPU; the
+// multi-point Vulkan corruption tracked as libsam2_ncnn issue #1 is fixed
+// since libsam2_ncnn v0.2.2).
 func New(cfg Config) *Client {
 	return &Client{cfg: cfg}
 }

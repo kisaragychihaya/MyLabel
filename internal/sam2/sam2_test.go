@@ -22,21 +22,28 @@ func writeStub(t *testing.T, path string) {
 	}
 }
 
+// Stub file names for the layout probes: any generation-size prefix resolves
+// through findModelFile; sam2-small-* is the canonical test fixture.
+const (
+	stubEncoderParam = "sam2-small-encoder_fixed.ncnn.param"
+	stubDecoderParam = "sam2-small-decoder_fixed.ncnn.param"
+)
+
 // stubInstall writes every file Detect looks for under a standard layout rooted
 // at dir (DLL next to the executable, models in dir/models, sam2_prompt.bin
 // next to the decoder .param).
 func stubInstall(t *testing.T, dir string) Config {
 	t.Helper()
 	writeStub(t, filepath.Join(dir, dllName))
-	writeStub(t, filepath.Join(dir, modelSubdir, encoderParamName))
-	writeStub(t, filepath.Join(dir, modelSubdir, strings.TrimSuffix(encoderParamName, ".param")+".bin"))
-	writeStub(t, filepath.Join(dir, modelSubdir, decoderParamName))
-	writeStub(t, filepath.Join(dir, modelSubdir, strings.TrimSuffix(decoderParamName, ".param")+".bin"))
+	writeStub(t, filepath.Join(dir, modelSubdir, stubEncoderParam))
+	writeStub(t, filepath.Join(dir, modelSubdir, strings.TrimSuffix(stubEncoderParam, ".param")+".bin"))
+	writeStub(t, filepath.Join(dir, modelSubdir, stubDecoderParam))
+	writeStub(t, filepath.Join(dir, modelSubdir, strings.TrimSuffix(stubDecoderParam, ".param")+".bin"))
 	writeStub(t, filepath.Join(dir, modelSubdir, promptName))
 	return Config{
 		DLL:          filepath.Join(dir, dllName),
-		EncoderParam: filepath.Join(dir, modelSubdir, encoderParamName),
-		DecoderParam: filepath.Join(dir, modelSubdir, decoderParamName),
+		EncoderParam: filepath.Join(dir, modelSubdir, stubEncoderParam),
+		DecoderParam: filepath.Join(dir, modelSubdir, stubDecoderParam),
 	}
 }
 
@@ -53,10 +60,10 @@ func TestDetectMissingInstall(t *testing.T) {
 	}
 	for _, drop := range []string{
 		filepath.Join(dir, modelSubdir, promptName),
-		filepath.Join(dir, modelSubdir, strings.TrimSuffix(decoderParamName, ".param")+".bin"),
-		filepath.Join(dir, modelSubdir, strings.TrimSuffix(encoderParamName, ".param")+".bin"),
-		filepath.Join(dir, modelSubdir, decoderParamName),
-		filepath.Join(dir, modelSubdir, encoderParamName),
+		filepath.Join(dir, modelSubdir, strings.TrimSuffix(stubDecoderParam, ".param")+".bin"),
+		filepath.Join(dir, modelSubdir, strings.TrimSuffix(stubEncoderParam, ".param")+".bin"),
+		filepath.Join(dir, modelSubdir, stubDecoderParam),
+		filepath.Join(dir, modelSubdir, stubEncoderParam),
 		filepath.Join(dir, dllName),
 	} {
 		if err := os.Remove(drop); err != nil {
@@ -91,8 +98,8 @@ func TestDetectEnvOverrides(t *testing.T) {
 	writeStub(t, dll)
 	writeStub(t, enc)
 	writeStub(t, dec)
-	writeStub(t, filepath.Join(modelDir, encoderParamName))
-	writeStub(t, filepath.Join(modelDir, decoderParamName))
+	writeStub(t, filepath.Join(modelDir, stubEncoderParam))
+	writeStub(t, filepath.Join(modelDir, stubDecoderParam))
 
 	t.Run("per file paths", func(t *testing.T) {
 		t.Setenv(envDLL, dll)
@@ -116,22 +123,22 @@ func TestDetectEnvOverrides(t *testing.T) {
 		t.Setenv(envEncoder, "")
 		t.Setenv(envDecoder, "")
 		t.Setenv(envModelDir, modelDir)
-		writeStub(t, filepath.Join(modelDir, strings.TrimSuffix(encoderParamName, ".param")+".bin"))
-		writeStub(t, filepath.Join(modelDir, strings.TrimSuffix(decoderParamName, ".param")+".bin"))
+		writeStub(t, filepath.Join(modelDir, strings.TrimSuffix(stubEncoderParam, ".param")+".bin"))
+		writeStub(t, filepath.Join(modelDir, strings.TrimSuffix(stubDecoderParam, ".param")+".bin"))
 		writeStub(t, filepath.Join(modelDir, promptName))
 		got, ok := Detect(exeDir)
 		if !ok {
 			t.Fatal("Detect = false, want true")
 		}
-		if got.EncoderParam != filepath.Join(modelDir, encoderParamName) ||
-			got.DecoderParam != filepath.Join(modelDir, decoderParamName) {
+		if got.EncoderParam != filepath.Join(modelDir, stubEncoderParam) ||
+			got.DecoderParam != filepath.Join(modelDir, stubDecoderParam) {
 			t.Fatalf("Detect = %+v, want the .param files from %s", got, modelDir)
 		}
 	})
 
 	t.Run("model dir missing one file", func(t *testing.T) {
 		thin := t.TempDir()
-		writeStub(t, filepath.Join(thin, encoderParamName))
+		writeStub(t, filepath.Join(thin, stubEncoderParam))
 		t.Setenv(envDLL, dll)
 		t.Setenv(envEncoder, "")
 		t.Setenv(envDecoder, "")
@@ -276,8 +283,8 @@ func smokeConfigs() []Config {
 		}
 		add(Config{
 			DLL:          filepath.Join(dir, dllName),
-			EncoderParam: filepath.Join(dir, encoderParamName),
-			DecoderParam: filepath.Join(dir, decoderParamName),
+			EncoderParam: filepath.Join(dir, stubEncoderParam),
+			DecoderParam: filepath.Join(dir, stubDecoderParam),
 		})
 	}
 	return out

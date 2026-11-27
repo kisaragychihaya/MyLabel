@@ -16,8 +16,8 @@ package sam2
 // of each .param must sit next to it (the DLL resolves it itself).
 type Config struct {
 	DLL          string // sam2_ncnn.dll
-	EncoderParam string // sam2_encoder_fixed.ncnn.param
-	DecoderParam string // sam2_decoder_fixed.ncnn.param
+	EncoderParam string // sam2-small-encoder_fixed.ncnn.param
+	DecoderParam string // sam2-small-decoder_fixed.ncnn.param
 	DeviceID     int    // Vulkan device index, 0 = default; ignored by the CPU backend
 }
 
