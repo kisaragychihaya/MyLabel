@@ -952,6 +952,180 @@ func (msgs Messages) StatusAIEncoding() string {
 	return Catalog.Format(msgs.locale, "statusAIEncoding", nil)
 }
 
+// AiDownloadTitle says "下载智能标注模型"
+// in the language the app shows.
+//
+// The consent modal's title: downloading the AI model set is the user's
+// decision, asked the first time the AI tool is pressed without a runtime.
+func AiDownloadTitle() string { return In(i18n.Locale()).AiDownloadTitle() }
+
+// AiDownloadTitle says "下载智能标注模型"
+// in the language of msgs.
+//
+// The consent modal's title: downloading the AI model set is the user's
+// decision, asked the first time the AI tool is pressed without a runtime.
+func (msgs Messages) AiDownloadTitle() string {
+	return Catalog.Format(msgs.locale, "aiDownloadTitle", nil)
+}
+
+// AiDownloadMessage says "首次使用智能标注需要下载 SAM2.1-small 模型文件（约 106MB…"
+// in the language the app shows.
+//
+// The consent modal's body: what will be downloaded, how large it is, and
+// that the download can be cancelled.
+func AiDownloadMessage() string { return In(i18n.Locale()).AiDownloadMessage() }
+
+// AiDownloadMessage says "首次使用智能标注需要下载 SAM2.1-small 模型文件（约 106MB…"
+// in the language of msgs.
+//
+// The consent modal's body: what will be downloaded, how large it is, and
+// that the download can be cancelled.
+func (msgs Messages) AiDownloadMessage() string {
+	return Catalog.Format(msgs.locale, "aiDownloadMessage", nil)
+}
+
+// AiDownloadStart says "下载"
+// in the language the app shows.
+//
+// The consent modal's confirm button.
+func AiDownloadStart() string { return In(i18n.Locale()).AiDownloadStart() }
+
+// AiDownloadStart says "下载"
+// in the language of msgs.
+//
+// The consent modal's confirm button.
+func (msgs Messages) AiDownloadStart() string {
+	return Catalog.Format(msgs.locale, "aiDownloadStart", nil)
+}
+
+// AiDownloadProgressTitle says "正在下载智能标注模型"
+// in the language the app shows.
+//
+// The progress modal's title, while the model set downloads.
+func AiDownloadProgressTitle() string { return In(i18n.Locale()).AiDownloadProgressTitle() }
+
+// AiDownloadProgressTitle says "正在下载智能标注模型"
+// in the language of msgs.
+//
+// The progress modal's title, while the model set downloads.
+func (msgs Messages) AiDownloadProgressTitle() string {
+	return Catalog.Format(msgs.locale, "aiDownloadProgressTitle", nil)
+}
+
+// AiDownloadProgress says "{name}（{pct}%）"
+// in the language the app shows.
+//
+// The progress modal's line naming the file in flight and its percentage.
+func AiDownloadProgress(name string, pct int) string {
+	return In(i18n.Locale()).AiDownloadProgress(name, pct)
+}
+
+// AiDownloadProgress says "{name}（{pct}%）"
+// in the language of msgs.
+//
+// The progress modal's line naming the file in flight and its percentage.
+func (msgs Messages) AiDownloadProgress(name string, pct int) string {
+	return Catalog.Format(msgs.locale, "aiDownloadProgress", map[string]any{"name": name, "pct": pct})
+}
+
+// AiDownloadOverall says "已完成 {done}/{count} 个文件"
+// in the language the app shows.
+//
+// The progress modal's line counting the finished files of the set.
+func AiDownloadOverall(done int, count int) string {
+	return In(i18n.Locale()).AiDownloadOverall(done, count)
+}
+
+// AiDownloadOverall says "已完成 {done}/{count} 个文件"
+// in the language of msgs.
+//
+// The progress modal's line counting the finished files of the set.
+func (msgs Messages) AiDownloadOverall(done int, count int) string {
+	return Catalog.Format(msgs.locale, "aiDownloadOverall", map[string]any{"done": done, "count": count})
+}
+
+// AiDownloadTip says "首次使用需下载模型"
+// in the language the app shows.
+//
+// The AI tool's tooltip addition while no runtime exists: pressing the
+// button will ask to download the model.
+func AiDownloadTip() string { return In(i18n.Locale()).AiDownloadTip() }
+
+// AiDownloadTip says "首次使用需下载模型"
+// in the language of msgs.
+//
+// The AI tool's tooltip addition while no runtime exists: pressing the
+// button will ask to download the model.
+func (msgs Messages) AiDownloadTip() string {
+	return Catalog.Format(msgs.locale, "aiDownloadTip", nil)
+}
+
+// AiDownloadIncomplete says "下载后运行时仍不完整"
+// in the language the app shows.
+//
+// The status bar detail, when the download finished but Detect still fails
+// (an unexpected layout or a corrupted file).
+func AiDownloadIncomplete() string { return In(i18n.Locale()).AiDownloadIncomplete() }
+
+// AiDownloadIncomplete says "下载后运行时仍不完整"
+// in the language of msgs.
+//
+// The status bar detail, when the download finished but Detect still fails
+// (an unexpected layout or a corrupted file).
+func (msgs Messages) AiDownloadIncomplete() string {
+	return Catalog.Format(msgs.locale, "aiDownloadIncomplete", nil)
+}
+
+// StatusAIBootstrapCancelled says "模型下载已取消"
+// in the language the app shows.
+//
+// The status bar, when the model download was cancelled from the progress
+// modal.
+func StatusAIBootstrapCancelled() string { return In(i18n.Locale()).StatusAIBootstrapCancelled() }
+
+// StatusAIBootstrapCancelled says "模型下载已取消"
+// in the language of msgs.
+//
+// The status bar, when the model download was cancelled from the progress
+// modal.
+func (msgs Messages) StatusAIBootstrapCancelled() string {
+	return Catalog.Format(msgs.locale, "statusAIBootstrapCancelled", nil)
+}
+
+// StatusAIBootstrapDone says "智能标注运行时就绪，点选工具已可用"
+// in the language the app shows.
+//
+// The status bar, when the first-run runtime download finished and the AI
+// tool button just appeared.
+func StatusAIBootstrapDone() string { return In(i18n.Locale()).StatusAIBootstrapDone() }
+
+// StatusAIBootstrapDone says "智能标注运行时就绪，点选工具已可用"
+// in the language of msgs.
+//
+// The status bar, when the first-run runtime download finished and the AI
+// tool button just appeared.
+func (msgs Messages) StatusAIBootstrapDone() string {
+	return Catalog.Format(msgs.locale, "statusAIBootstrapDone", nil)
+}
+
+// StatusAIBootstrapFailed says "智能标注运行时下载失败：{err}"
+// in the language the app shows.
+//
+// The status bar, when the first-run runtime download failed; the AI tool
+// stays hidden.
+func StatusAIBootstrapFailed(err string) string {
+	return In(i18n.Locale()).StatusAIBootstrapFailed(err)
+}
+
+// StatusAIBootstrapFailed says "智能标注运行时下载失败：{err}"
+// in the language of msgs.
+//
+// The status bar, when the first-run runtime download failed; the AI tool
+// stays hidden.
+func (msgs Messages) StatusAIBootstrapFailed(err string) string {
+	return Catalog.Format(msgs.locale, "statusAIBootstrapFailed", map[string]any{"err": err})
+}
+
 // StatusAIPrefetching says "正在后台编码图像…"
 // in the language the app shows.
 //

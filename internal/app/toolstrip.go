@@ -12,9 +12,10 @@ import (
 // tools (rectangle, polygon, rotated box) below it; a new tool joins the strip by
 // joining toolSpecs.
 //
-// The AI tool is the one conditional button: it joins the creation group at the
-// end of the list only when the native library was detected at startup, so a
-// machine without it keeps the seven-button strip (docs/phase7-design.md §2).
+// The AI tool is the one conditional-behaviour button: it joins the creation
+// group at the end of the strip on every machine, but pressing it without a
+// runtime opens the download consent modal instead of switching tools
+// (docs/phase7-design.md §2, §4).
 
 const (
 	// toolStripWidth is the strip's fixed width, in DIP: one icon button plus the
@@ -71,9 +72,13 @@ func aiToolIcon(a *App) *ui.SVG {
 	return iconToolAIPoly
 }
 
-// aiToolTip is the AI button's tooltip: its name and shortcut, then the shape the
-// next double-click will create.
+// aiToolTip is the AI button's tooltip: its name and shortcut, then the shape
+// the next double-click will create — or, without a runtime, the download the
+// first press will ask about.
 func aiToolTip(a *App) string {
+	if !a.aiReady() {
+		return locales.ToolStripAI() + " · " + locales.AiDownloadTip()
+	}
 	return locales.ToolStripAI() + " · " + aiKindName(a.aiRectMode)
 }
 
@@ -100,13 +105,12 @@ var toolSpecs = []toolSpec{
 	{ToolObb, "toolObb", fixedIcon(iconToolObb), locales.ToolStripObb, nil},
 }
 
-// stripSpecs is this app's button list: toolSpecs, plus the AI tool's button when
-// the native library was detected. The package list stays the seven buttons every
-// other tool (and the strip's tests) knows about (docs/phase7-design.md §2).
+// stripSpecs is this app's button list: the seven fixed tools plus the AI
+// tool's button, which is always there. The AI tool only *acts* when a
+// runtime exists (aiReady); without one, pressing its button opens the
+// download consent modal instead of switching (aidl.go), so the strip is the
+// same eight buttons on every machine.
 func (a *App) stripSpecs() []toolSpec {
-	if !a.aiReady() {
-		return toolSpecs
-	}
 	// The full slice expression caps the copy's capacity, so appending can never
 	// write into the package-level list.
 	return append(toolSpecs[:len(toolSpecs):len(toolSpecs)], aiToolSpec)

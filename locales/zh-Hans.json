@@ -476,6 +476,58 @@
   "@statusAIEncoding": {
     "description": "The status bar, while the AI assist encodes the image its prompt will be decoded against; the first run on an image pays this."
   },
+  "aiDownloadTitle": "下载智能标注模型",
+  "@aiDownloadTitle": {
+    "description": "The consent modal's title: downloading the AI model set is the user's decision, asked the first time the AI tool is pressed without a runtime."
+  },
+  "aiDownloadMessage": "首次使用智能标注需要下载 SAM2.1-small 模型文件（约 106MB，仅一次）。下载在后台进行，完成后工具即可使用；可随时取消。",
+  "@aiDownloadMessage": {
+    "description": "The consent modal's body: what will be downloaded, how large it is, and that the download can be cancelled."
+  },
+  "aiDownloadStart": "下载",
+  "@aiDownloadStart": {
+    "description": "The consent modal's confirm button."
+  },
+  "aiDownloadProgressTitle": "正在下载智能标注模型",
+  "@aiDownloadProgressTitle": {
+    "description": "The progress modal's title, while the model set downloads."
+  },
+  "aiDownloadProgress": "{name}（{pct}%）",
+  "@aiDownloadProgress": {
+    "description": "The progress modal's line naming the file in flight and its percentage.",
+    "placeholders": {
+      "name": { "type": "String" },
+      "pct": { "type": "int" }
+    }
+  },
+  "aiDownloadOverall": "已完成 {done}/{count} 个文件",
+  "@aiDownloadOverall": {
+    "description": "The progress modal's line counting the finished files of the set.",
+    "placeholders": {
+      "done": { "type": "int" },
+      "count": { "type": "int" }
+    }
+  },
+  "aiDownloadTip": "首次使用需下载模型",
+  "@aiDownloadTip": {
+    "description": "The AI tool's tooltip addition while no runtime exists: pressing the button will ask to download the model."
+  },
+  "aiDownloadIncomplete": "下载后运行时仍不完整",
+  "@aiDownloadIncomplete": {
+    "description": "The status bar detail, when the download finished but Detect still fails (an unexpected layout or a corrupted file)."
+  },
+  "statusAIBootstrapCancelled": "模型下载已取消",
+  "@statusAIBootstrapCancelled": {
+    "description": "The status bar, when the model download was cancelled from the progress modal."
+  },
+  "statusAIBootstrapDone": "智能标注运行时就绪，点选工具已可用",
+  "@statusAIBootstrapDone": {
+    "description": "The status bar, when the first-run runtime download finished and the AI tool button just appeared."
+  },
+  "statusAIBootstrapFailed": "智能标注运行时下载失败：{err}",
+  "@statusAIBootstrapFailed": {
+    "description": "The status bar, when the first-run runtime download failed; the AI tool stays hidden."
+  },
   "statusAIPrefetching": "正在后台编码图像…",
   "@statusAIPrefetching": {
     "description": "The status bar, when the first collected point starts encoding the image in the background, ahead of the double-click that will ask for a mask."

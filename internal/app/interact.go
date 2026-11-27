@@ -898,6 +898,12 @@ func (a *App) chooseTool(t Tool) {
 		return
 	}
 	if t != a.tool {
+		// The AI button is always in the strip, but without a runtime it asks
+		// first: the consent modal, not a tool switch (aidl.go).
+		if t == ToolAI && !a.aiReady() {
+			a.aiAskBootstrap()
+			return
+		}
 		a.setTool(t)
 		return
 	}

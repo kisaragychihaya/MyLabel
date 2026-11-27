@@ -1,0 +1,45 @@
+name: Release
+
+# Windows installer (NSIS) builds. The AI assist runtime's native DLL is
+# fetched from the Gitee dist zip at build time and lands next to the exe via
+# resources/windows (mygo build bundles resources/<platform>/ into the
+# installer); the model set (~106 MB) is NOT bundled — the app downloads it
+# from the ModelScope mirror on first use (internal/sam2/bootstrap.go).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+
+      - name: Stage sam2_ncnn.dll into resources
+        shell: pwsh
+        run: |
+          $zip = "dist-v0.2.2-vulkan.zip"
+          curl.exe -L --retry 3 --fail -o $zip "https://gitee.com/mashiro_F/libsam2_ncnn/releases/download/v0.2.2/$zip"
+          if ($LASTEXITCODE -ne 0) { throw "dist zip download failed" }
+          Expand-Archive -Path $zip -DestinationPath "dist-zip" -Force
+          New-Item -ItemType Directory -Force "resources/windows" | Out-Null
+          Copy-Item "dist-zip/bin/sam2_ncnn.dll" "resources/windows/sam2_ncnn.dll"
+          Get-Item "resources/windows/sam2_ncnn.dll" | Select-Object Name, Length
+
+      - name: Build exe + NSIS installer
+        shell: pwsh
+        env:
+          GOFLAGS: "-tags=mygo_nowebview"
+        run: go tool mygo build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mylabel-windows
+          path: dist/windows-amd64/
+          if-no-files-found: error

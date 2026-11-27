@@ -13,6 +13,10 @@ import (
 // call, so a test that checks another language passes locales.In itself.
 func TestMain(m *testing.M) {
 	os.Setenv("MYGO_LOCALE", "zh-Hans")
+	// The AI runtime bootstrap hits the network when Detect fails under the
+	// test binary (the window-less path runs it synchronously); tests inject
+	// their own client and never want that.
+	os.Setenv("MYLABEL_NO_SAM_BOOTSTRAP", "1")
 	os.Exit(m.Run())
 }
 

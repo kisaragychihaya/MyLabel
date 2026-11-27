@@ -1,7 +1,7 @@
 {
   "name": "MyLabel",
   "identifier": "com.mylabel.app",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "icon": "resources/icon.png",
   "i18n": { "dir": "locales", "source": "zh-Hans" }
 }

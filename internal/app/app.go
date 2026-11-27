@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"math"
 	"os"
 	"path/filepath"
@@ -113,7 +114,17 @@ type App struct {
 	// result recognize it arrived too late. aiEmb is the encoder embedding cached
 	// for images[aiEmbFor] (-1 = none): it is released when the image, the folder
 	// or the app goes away.
-	sam        *sam2.Client
+	sam *sam2.Client
+	// First-run runtime acquisition (aidl.go): aiBootState renders the consent
+	// or progress modal, aiBootGen discards stale download results, aiDL is
+	// what the progress modal shows, and aiDownloadModel is the test hook
+	// standing in for sam2.DownloadModel.
+	aiBootState     int
+	aiBootDir       string
+	aiBootGen       uint64
+	aiDL            aiDLUI
+	aiDLCancel      context.CancelFunc
+	aiDownloadModel func(ctx context.Context, dir string, cb func(sam2.ModelProgress)) error
 	aiRectMode bool
 	aiPoints   []Point
 	aiBusy     bool
@@ -189,17 +200,26 @@ func New() *App {
 	return a
 }
 
-// detectSAM2 creates the native client when the library sits next to the
-// executable (docs/phase7-design.md §4). Detect only stats three files and never
-// loads the DLL, so a machine without them pays nothing and the AI tool stays
-// hidden: every entry point of the feature hangs off a.sam being non-nil.
+// detectSAM2 creates the native client when the runtime sits next to the
+// executable (docs/phase7-design.md §4): the DLL plus the model set under
+// models/. When the DLL is missing entirely, a fire-and-forget goroutine
+// fetches it from the dist zip — pure filesystem work, no App state, so the
+// app startup never waits on it. The models are the user's decision: the AI
+// button is always in the strip, and pressing it without a runtime opens the
+// consent modal instead (aidl.go).
 func (a *App) detectSAM2() {
 	exe, err := os.Executable()
 	if err != nil {
 		return
 	}
-	if cfg, ok := sam2.Detect(filepath.Dir(exe)); ok {
+	dir := filepath.Dir(exe)
+	a.aiBootDir = dir
+	if cfg, ok := sam2.Detect(dir); ok {
 		a.sam = sam2.New(cfg)
+		return
+	}
+	if !aiDownloadEnvOff() {
+		go func() { _ = sam2.EnsureDLL(dir) }()
 	}
 }
 
@@ -651,6 +671,7 @@ func (a *App) View(c *ui.Context) {
 		a.exportModal(c)
 		a.propsModal(c)
 		a.catPickModal(c)
+		a.aiDownloadModal(c)
 	})
 	a.handleDroppedFiles(root)
 	a.flushToast(c)

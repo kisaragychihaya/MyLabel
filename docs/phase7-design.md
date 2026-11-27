@@ -1,8 +1,8 @@
 # 阶段 7 设计契约：SAM2 智能标注辅助
 
 > 状态：设计定稿，待实现。前置依赖：`kisaragychihaya/libsam2_ncnn` 的
-> `sam2_ncnn.dll`（C ABI）与 `sam2_encoder_fixed.ncnn.param` /
-> `sam2_decoder_fixed.ncnn.param` 模型文件。
+> `sam2_ncnn.dll`（C ABI）与 `sam2-small-encoder_fixed.ncnn.param` /
+> `sam2-small-decoder_fixed.ncnn.param` 模型文件。
 
 ## 1. 目标与非目标
 
@@ -16,14 +16,20 @@
 
 - 负点提示、框提示、多点交互式精炼（模型支持，UI 不做）。
 - mask 叠加预览、模型管理对话框。
-- 非 Windows 平台运行（DLL 不存在时工具自动隐藏，见 §5）。
+- 非 Windows 平台运行（DLL 不存在时工具无法激活，见 §5）。
 - 自动保存模型路径设置（只认 §4 的探测规则）。
 
 ## 2. 交互契约（docs/phase6 风格的单激活工具模型）
 
-- 工具条在创建工具组（分隔线之后、矩形/多边形/旋转框）末尾追加第 8 个按钮
-  「智能标注」，魔棒图标，快捷键 **S**。仅当 §4 的运行时探测成功时显示；
-  模型文件缺失时工具条保持原 7 按钮，功能零感知。
+- 工具条在创建工具组（分隔线之后、矩形/多边形/旋转框）末尾常驻第 8 个按钮
+  「智能标注」，魔棒图标，快捷键 **S**——任何机器上都在（无运行时仅不可激活）。
+- 运行时探测（§4）失败时点按钮/按 S：不切换工具，改为弹出「下载智能标注模型」
+  同意框（说明将下载 SAM2.1-small 约 106MB、可取消）；同意后进入进度弹窗（当前
+  文件 + 百分比 + n/5 文件数），Esc、点遮罩或「取消」都会中断下载（`.tmp` 原子
+  改名保证不留半成品，重下自动续传已存在的文件）。下载完成客户端创建后，再按
+  按钮才走正常激活流程。启动时若连 DLL 也缺，后台静默补 DLL（用户无感知，模型
+  下载流程内部也会幂等兜底）；测试用 `MYLABEL_NO_SAM_BOOTSTRAP=1` 禁用。
+- 无运行时按钮的 Tooltip 附注「首次使用需下载模型」。
 - 按钮点击行为与缩放工具同构（`chooseTool`）：未激活 → 激活；已激活 →
   切换输出模式（多边形 ⇄ 矩形），图标随模式变化。
 - 激活后单击画布：追加一个前景点（图像像素坐标，十字标记画在画布上）。
@@ -63,8 +69,8 @@
 优先级从高到低：
 
 1. 环境变量 `SAM2_DLL` / `SAM2_ENCODER` / `SAM2_DECODER`（可单独覆盖）。
-2. exe 同级完整运行时：`sam2_ncnn.dll` + `models/sam2_encoder_fixed.ncnn.param` +
-   `models/sam2_decoder_fixed.ncnn.param` 及各自 `.bin` + `sam2_prompt.bin`
+2. exe 同级完整运行时：`sam2_ncnn.dll` + `models/sam2-small-encoder_fixed.ncnn.param` +
+   `models/sam2-small-decoder_fixed.ncnn.param` 及各自 `.bin` + `sam2_prompt.bin`
    （DLL 要求它在 decoder .param 同级，`load_prompt_consts`）。
 
 缺任一文件 → 探测失败 → 工具不出现。DLL 的 Vulkan 版可直接使用：无 GPU 的

@@ -1,8 +1,11 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"math"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -49,10 +52,11 @@ func aiTestApp() *App {
 	return a
 }
 
-// TestAIToolHiddenWithoutLibrary: a machine without the native library keeps the
-// seven-button strip, its S key does nothing, and the tool still counts as a
-// creation tool for the state machine (docs/phase7-design.md §2, §8).
-func TestAIToolHiddenWithoutLibrary(t *testing.T) {
+// TestAIToolShownWithoutLibrary: the AI button is a permanent eighth button
+// even without a runtime; pressing it does not switch tools but opens the
+// download consent modal, and the S shortcut stays inert until a runtime
+// exists (docs/phase7-design.md §2, §4).
+func TestAIToolShownWithoutLibrary(t *testing.T) {
 	a, tt, _ := stripRig(t)
 	if a.sam != nil {
 		t.Fatalf("测试进程旁边没有 DLL，sam = %v，期望 nil", a.sam)
@@ -61,37 +65,53 @@ func TestAIToolHiddenWithoutLibrary(t *testing.T) {
 		t.Errorf("没有 DLL 时 aiReady() = true")
 	}
 
-	// The seven buttons are there, found by the names their locale messages give.
+	// All eight buttons are there, found by the names their locale messages give.
 	names := []string{
 		locales.ToolStripSelect(), locales.ToolStripPan(), locales.ToolStripZoom(),
 		locales.ToolStripMarquee(), locales.ToolStripRect(), locales.ToolStripPoly(),
-		locales.ToolStripObb(),
+		locales.ToolStripObb(), locales.ToolStripAI(),
 	}
 	for _, name := range names {
 		if r, ok := tt.Find(name); !ok || r.W <= 0 {
 			t.Errorf("工具条按钮 %q 未找到：ok=%v rect=%+v", name, ok, r)
 		}
 	}
-	if got := len(a.stripSpecs()); got != 7 {
-		t.Errorf("工具条渲染 %d 个按钮，期望 7 个", got)
-	}
-	if _, ok := tt.Find(locales.ToolStripAI()); ok {
-		t.Errorf("没有 DLL 时仍出现了 %q 按钮", locales.ToolStripAI())
+	if got := len(a.stripSpecs()); got != 8 {
+		t.Errorf("工具条渲染 %d 个按钮，期望 8 个", got)
 	}
 
-	// The tool is a creation tool even where it cannot be reached: the state
-	// machine's rules (clear the selection, never edit what is under the press)
-	// do not depend on the library being there.
+	// Pressing it without a runtime opens the consent modal instead of
+	// switching: the tool stays where it was, the modal's title is on screen.
+	if err := tt.Click(locales.ToolStripAI()); err != nil {
+		t.Fatalf("点击 %q：%v", locales.ToolStripAI(), err)
+	}
+	if a.tool == ToolAI {
+		t.Errorf("没有运行时时点击 AI 切换了工具")
+	}
+	if a.aiBootState != aiBootAsk {
+		t.Errorf("aiBootState = %d，期望 aiBootAsk", a.aiBootState)
+	}
+	if _, ok := tt.Find(locales.AiDownloadTitle()); !ok {
+		t.Errorf("同意下载的弹窗未出现：texts=%v", tt.Texts())
+	}
+
+	// The tool is a creation tool even where it cannot be activated yet: the
+	// state machine's rules (clear the selection, never edit what is under the
+	// press) do not depend on the library being there.
 	if !isCreationTool(ToolAI) {
 		t.Errorf("isCreationTool(ToolAI) = false，期望 true")
 	}
 
-	// S is simply not a shortcut here: it must neither panic nor switch the tool.
+	// S is simply not a shortcut here: it must neither panic nor switch the
+	// tool, and it must not open the modal either.
 	if keyWith(a, ui.KeyS, 0) {
 		t.Errorf("没有 DLL 时 S 被处理了")
 	}
 	if a.tool != ToolSelect {
 		t.Errorf("没有 DLL 时按 S 后 tool = %v，期望保持 ToolSelect", a.tool)
+	}
+	if a.aiBootState != aiBootAsk {
+		t.Errorf("按 S 后 aiBootState = %d，期望不变（aiBootAsk）", a.aiBootState)
 	}
 }
 
@@ -152,11 +172,146 @@ func TestAIToolStripButton(t *testing.T) {
 	if iconToolAIPoly == iconToolAIRect {
 		t.Errorf("两种模式的图标是同一个 SVG")
 	}
-	if got, want := aiToolTip(&zero), locales.ToolStripAI()+" · "+locales.PropsKindPolygon(); got != want {
+	// The tooltip is state-aware: a runtime-less app announces the download
+	// the first press will ask about; a ready app names the output shape.
+	if got, want := aiToolTip(&zero), locales.ToolStripAI()+" · "+locales.AiDownloadTip(); got != want {
+		t.Errorf("无运行时的 Tooltip = %q，期望 %q", got, want)
+	}
+	ready := func(rect bool) *App {
+		a := aiTestApp()
+		a.aiRectMode = rect
+		return a
+	}
+	if got, want := aiToolTip(ready(false)), locales.ToolStripAI()+" · "+locales.PropsKindPolygon(); got != want {
 		t.Errorf("多边形模式的 Tooltip = %q，期望 %q", got, want)
 	}
-	if got, want := aiToolTip(&App{aiRectMode: true}), locales.ToolStripAI()+" · "+locales.PropsKindRect(); got != want {
+	if got, want := aiToolTip(ready(true)), locales.ToolStripAI()+" · "+locales.PropsKindRect(); got != want {
 		t.Errorf("矩形模式的 Tooltip = %q，期望 %q", got, want)
+	}
+}
+
+// writeRuntimeStub lays out a Detect-passing runtime in dir: the DLL plus the
+// five model files under models/, all empty (Detect stats names only).
+func writeRuntimeStub(t *testing.T, dir string) {
+	t.Helper()
+	write := func(path string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+	write(filepath.Join(dir, "sam2_ncnn.dll"))
+	for _, name := range []string{
+		"sam2.1-small-encoder_fixed.ncnn.param",
+		"sam2.1-small-encoder_fixed.ncnn.bin",
+		"sam2.1-small-decoder_fixed.ncnn.param",
+		"sam2.1-small-decoder_fixed.ncnn.bin",
+		"sam2_prompt.bin",
+	} {
+		write(filepath.Join(dir, "models", name))
+	}
+}
+
+// TestAIDownloadFlow: pressing the AI tool without a runtime asks first; the
+// download button runs the (injected) downloader, and a finished download
+// creates the client so the next press activates the tool (aidl.go).
+func TestAIDownloadFlow(t *testing.T) {
+	a, tt, _ := stripRig(t)
+	a.aiBootDir = t.TempDir()
+	writeRuntimeStub(t, a.aiBootDir) // the downloader will "fetch" what is already there
+	a.aiDownloadModel = func(ctx context.Context, dir string, cb func(sam2.ModelProgress)) error {
+		return nil // stub files are in place; nothing to do
+	}
+
+	if err := tt.Click(locales.ToolStripAI()); err != nil {
+		t.Fatalf("点击 %q：%v", locales.ToolStripAI(), err)
+	}
+	if err := tt.Click(locales.AiDownloadStart()); err != nil {
+		t.Fatalf("点击 %q：%v", locales.AiDownloadStart(), err)
+	}
+	if a.aiBootState != aiBootNone {
+		t.Fatalf("下载完成后 aiBootState = %d，期望 aiBootNone", a.aiBootState)
+	}
+	if a.sam == nil {
+		t.Fatal("下载完成后 sam = nil，期望已创建客户端")
+	}
+	if got := a.lastStatus; got != locales.StatusAIBootstrapDone() {
+		t.Errorf("状态栏 = %q，期望 %q", got, locales.StatusAIBootstrapDone())
+	}
+	if err := tt.Click(locales.ToolStripAI()); err != nil {
+		t.Fatalf("再次点击 %q：%v", locales.ToolStripAI(), err)
+	}
+	if a.tool != ToolAI {
+		t.Errorf("就绪后点击 AI tool = %v，期望 ToolAI", a.tool)
+	}
+}
+
+// TestAIDownloadConsentCancel: the consent modal's cancel keeps everything
+// untouched, and a retry from the same press starts over cleanly.
+func TestAIDownloadConsentCancel(t *testing.T) {
+	a, tt, _ := stripRig(t)
+	if err := tt.Click(locales.ToolStripAI()); err != nil {
+		t.Fatalf("点击 %q：%v", locales.ToolStripAI(), err)
+	}
+	if err := tt.Click(locales.CommonCancel()); err != nil {
+		t.Fatalf("点击 %q：%v", locales.CommonCancel(), err)
+	}
+	if a.aiBootState != aiBootNone {
+		t.Errorf("取消后 aiBootState = %d，期望 aiBootNone", a.aiBootState)
+	}
+	if a.tool == ToolAI {
+		t.Errorf("取消后 tool = ToolAI，期望未切换")
+	}
+	if _, ok := tt.Find(locales.AiDownloadTitle()); ok {
+		t.Errorf("取消后同意弹窗仍在：texts=%v", tt.Texts())
+	}
+	// Pressing again asks again: the consent reopens.
+	if err := tt.Click(locales.ToolStripAI()); err != nil {
+		t.Fatalf("再次点击 %q：%v", locales.ToolStripAI(), err)
+	}
+	if a.aiBootState != aiBootAsk {
+		t.Errorf("再次点击后 aiBootState = %d，期望 aiBootAsk", a.aiBootState)
+	}
+}
+
+// TestAIDownloadProgressCancel: while downloading, the progress modal shows
+// and its cancel aborts through the context; a stale result arriving after
+// the cancel must not create a client nor touch the state.
+func TestAIDownloadProgressCancel(t *testing.T) {
+	a, tt, _ := stripRig(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a.aiBootState = aiBootModel
+	a.aiDLCancel = cancel
+	a.aiDL.set(sam2.ModelProgress{Name: "sam2.1-small-encoder_fixed.ncnn.bin", Bytes: 40 << 20, Total: 93_838_868, Done: 1, Count: 5})
+	a.aiBootGen = 1
+
+	tt.Frame() // the state above is new since the rig's last frame
+	if _, ok := tt.Find(locales.AiDownloadProgressTitle()); !ok {
+		t.Fatalf("进度弹窗未出现：texts=%v", tt.Texts())
+	}
+	if _, ok := tt.Find(locales.AiDownloadProgress("sam2.1-small-encoder_fixed.ncnn.bin", 44)); !ok {
+		t.Errorf("进度行未出现：texts=%v", tt.Texts())
+	}
+	if err := tt.Click(locales.CommonCancel()); err != nil {
+		t.Fatalf("点击 %q：%v", locales.CommonCancel(), err)
+	}
+	if a.aiBootState != aiBootNone {
+		t.Errorf("取消后 aiBootState = %d，期望 aiBootNone", a.aiBootState)
+	}
+	if err := ctx.Err(); !errors.Is(err, context.Canceled) {
+		t.Errorf("ctx.Err() = %v，期望 context.Canceled", err)
+	}
+	// The superseded worker's late result is discarded by the generation.
+	a.aiModelLanded(1, nil)
+	if a.sam != nil {
+		t.Error("过期结果创建了客户端")
+	}
+	if a.aiBootState != aiBootNone || a.lastStatus == locales.StatusAIBootstrapDone() {
+		t.Errorf("过期结果改动了状态：state=%d status=%q", a.aiBootState, a.lastStatus)
 	}
 }
 
